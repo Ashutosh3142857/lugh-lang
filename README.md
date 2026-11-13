@@ -91,6 +91,36 @@ Run the full demo:
 python lugh.py examples/research_desk.lugh --yes --eval
 ```
 
+## Full-stack apps: routes, pages and a human in the loop
+
+One `.lugh` file can be an API, a web UI and an approval workflow
+([example](examples/fare_desk.lugh), [reference](docs/SPEC.md#web-routes-and-pages-lugh-core-v04)):
+
+```lugh
+route POST "/api/book"
+  let b = request.body
+  ensure b.price < 45000 else respond 422 "Over budget"
+  ask human "Book {b.airline} at INR {b.price}?" -> ok   # waits in the web inbox
+  when ok
+    respond 201 b
+  otherwise
+    respond 403 "Rejected"
+
+page "/" title "Fare desk"
+  stat from "/api/best" field price label "Lowest fare (INR)"
+  table from "/api/fares" columns airline, depart, price
+  form to "/api/book" fields airline, price submit "Request booking"
+```
+
+```bash
+./core/target/release/lugh examples/fare_desk.lugh --serve 8080
+# open http://127.0.0.1:8080 and the approvals inbox at /_lugh/inbox
+```
+
+`ask human` inside a route pauses that request until someone clicks Approve or
+Reject in the inbox. Pages are server-rendered HTML (about 6 KB each, including
+styles and script) with no build step.
+
 ## Two runtimes
 
 | | Python reference (`lugh.py`) | Lugh Core (`core/`, Rust) |
@@ -98,6 +128,7 @@ python lugh.py examples/research_desk.lugh --yes --eval
 | Use it for | Prototyping, the browser adapter | Production, scale, embedding |
 | Install | Python 3.9+ | One 2.4 MB binary, libc only |
 | Adapters | http, fs, shell, browser, llm | http, fs, shell, llm |
+| Web (routes, pages, inbox) | — | Yes |
 
 Both runtimes produce identical results on the bundled examples.
 
@@ -155,11 +186,12 @@ An adapter is one class: a map of `verb → effect` and a `call(verb, args)` met
 
 1. **Learn (v0.2)** ✓ — research-derived primitives, adaptive routing, evaluation
 2. **Native (v0.3)** ✓ — Lugh Core: Rust runtime, compile-once execution, benchmarks
-3. **Compile (v0.4)** — bytecode VM, field access compiled to fixed slots, WebAssembly build
-4. **Connect (v0.5)** — MCP client in Core, editor syntax support, multi-agent message passing
-5. **Reach (v0.6)** — desktop app adapter, screen fallback, spend metering
-6. **Trust (v1.0)** — signed audit logs, shareable policy packs, automatic fallback ladder
-7. **Platform** — hosted runtime, adapter marketplace, team approvals
+3. **Full stack (v0.4)** ✓ — routes, pages, approvals inbox, end-to-end tests
+4. **Compile (v0.5)** — bytecode VM, field access compiled to fixed slots, WebAssembly build
+5. **Connect (v0.6)** — MCP client in Core, editor syntax support, multi-agent message passing
+6. **Reach (v0.7)** — desktop app adapter, screen fallback, spend metering
+7. **Trust (v1.0)** — authentication and TLS for served apps, signed audit logs, shareable policy packs, automatic fallback ladder
+8. **Platform** — hosted runtime, adapter marketplace, team approvals
 
 ## License
 

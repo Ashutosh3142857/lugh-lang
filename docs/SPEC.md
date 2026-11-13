@@ -1,4 +1,4 @@
-# Lugh Language Specification — v0.2
+# Lugh Language Specification — v0.4
 
 ## Program structure
 
@@ -106,3 +106,69 @@ Strings interpolate `{name.field}`.
 ## Memory
 
 `lugh_memory.json` — key/value store written by `remember` and read by `recall`, persisted between runs.
+
+## Web: routes and pages (Lugh Core, v0.4)
+
+A program may declare `route` and `page` blocks alongside goals. Run it with
+`lugh program.lugh --serve 8080` (add `--public` to listen on all interfaces).
+
+### Routes (backend)
+
+```
+route GET "/api/fares/:airline"
+  let fares = fs.read "fares.json" as json
+  each f in fares
+    when f.airline == request.params.airline
+      respond f
+  respond 404 "No fare for {request.params.airline}"
+```
+
+| Item | Description |
+| --- | --- |
+| `route <METHOD> "<path>"` | `GET`, `POST`, `PUT`, `PATCH`, `DELETE`. Segments starting with `:` are parameters. |
+| `request` | `{method, path, params, query, body}`. JSON bodies are parsed; form bodies become objects; numeric strings become numbers. |
+| `respond [status] <value>` | Ends the request. Text is sent as `text/plain`, everything else as JSON. Default status 200. |
+| `ensure <cond> else respond <status> <value>` | Validation in one line. |
+| Falling off the end | Responds 200 with the value of the last statement. |
+| `ask human` | Waits (up to 5 minutes) for a decision in the approvals inbox. No decision counts as a rejection. |
+
+Status codes for other outcomes: `stop` → 422, policy denial → 403, budget
+exceeded → 429, failure → 500. Each request gets a fresh budget; memory,
+learned route statistics and the audit log are shared.
+
+### Pages (frontend)
+
+```
+page "/" title "Fare desk"
+  text "Live fares from three sources."
+  stat from "/api/best" field price label "Lowest fare (INR)"
+  table from "/api/fares" columns airline, depart, price
+  form to "/api/book" fields airline, price submit "Request booking"
+```
+
+| Element | Renders |
+| --- | --- |
+| `heading "…"` / `text "…"` | A heading / a paragraph. |
+| `link "…" to "/path"` | A link. |
+| `table from "/api" [columns a, b]` | A table of the JSON list the route returns. |
+| `list from "/api" [show field]` | A bulleted list. |
+| `stat from "/api" [field f] label "…"` | One large number with a label. |
+| `form to "/api" fields a, b [submit "…"]` | A form that POSTs JSON and shows the response. |
+| `button "…" calls "/api"` | A button that POSTs and shows the response. |
+| `approvals` / `audit` | The pending-approvals list / recent activity. |
+
+Pages are rendered on the server to plain HTML with a ~3 KB script: no build
+step, no client framework, light and dark themes.
+
+### Built in
+
+| Path | Purpose |
+| --- | --- |
+| `/_lugh/inbox` | Approvals inbox and live activity. |
+| `GET /_lugh/api/approvals` | Pending approvals as JSON. |
+| `POST /_lugh/api/approvals/:id` | `{"approve": true|false}`. |
+| `GET /_lugh/api/audit` | The 30 most recent audit records. |
+
+The server binds to `127.0.0.1` by default. It doesn't yet provide
+authentication or TLS: put it behind a reverse proxy with auth before exposing
+it to a network.

@@ -18,3 +18,4 @@ examples/data/reconciled.log
 bench/peakrss
 core/target/
 bench/data/
+examples/data/bookings.log

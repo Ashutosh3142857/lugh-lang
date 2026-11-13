@@ -1,0 +1,63 @@
+# A full-stack Lugh app in one file: an API, a web UI and human approval.
+# Run:  ./core/target/release/lugh examples/fare_desk.lugh --serve 8080
+# Then open http://127.0.0.1:8080
+
+agent FareDesk
+  use fs
+  budget time 5m, calls 20
+  policy
+    allow read, write
+    ask human before send, spend, submit
+    deny delete
+
+  # ───── backend ─────
+
+  route GET "/api/fares"
+    respond fs.read "examples/data/fares_a.json" as json
+
+  route GET "/api/fares/:airline"
+    let fares = fs.read "examples/data/fares_a.json" as json
+    each f in fares
+      when f.airline == request.params.airline
+        respond f
+    respond 404 "No fare for {request.params.airline}"
+
+  route GET "/api/best"
+    # Three sources must agree before the price is shown.
+    let fare = consensus
+      pick lowest price from fs.read "examples/data/fares_a.json" as json
+      pick lowest price from fs.read "examples/data/fares_b.json" as json
+      pick lowest price from fs.read "examples/data/fares_c.json" as json
+    respond fare
+
+  route POST "/api/book"
+    let b = request.body
+    ensure b.price < 45000 else respond 422 "Over the 45000 INR budget"
+    # The request waits here until someone approves it in the inbox.
+    ask human "Book {b.airline} at INR {b.price}?" -> ok
+    when ok
+      fs.append "examples/data/bookings.log" b
+      remember "last_booking" = b
+      respond 201 b
+    otherwise
+      respond 403 "Booking rejected by a human"
+
+  route GET "/api/bookings"
+    let last = recall "last_booking"
+    when last
+      respond [last]
+    otherwise
+      respond []
+
+  # ───── frontend ─────
+
+  page "/" title "Fare desk"
+    text "Live fares from three sources. Bookings need a human's approval in the inbox."
+    stat from "/api/best" field price label "Agreed lowest fare (INR)"
+    table from "/api/fares" columns airline, depart, price, stops
+    heading "Request a booking"
+    form to "/api/book" fields airline, price submit "Request booking"
+
+  page "/bookings" title "Bookings"
+    table from "/api/bookings" columns airline, price, depart
+    link "Back to fares" to "/"

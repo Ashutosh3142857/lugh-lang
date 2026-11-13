@@ -9,7 +9,11 @@ cd core && cargo build --release
 ```
 
 Flags: `--yes` (auto-approve), `--check` (static policy report), `--eval`
-(weighted score), `--quiet`.
+(weighted score), `--quiet`, `--serve [port]` (run routes and pages; add
+`--public` to bind all interfaces).
+
+Tests: `cargo test --release` runs the example programs and drives the web
+server end to end, including an approval through the inbox.
 
 ## Design
 
@@ -18,6 +22,7 @@ Flags: `--yes` (auto-approve), `--check` (static policy report), `--eval`
 | `parser.rs` | Source → indentation tree → statement and expression trees, **once**, before anything runs. Variable paths such as `fare.price` are split at compile time. |
 | `runtime.rs` | Executes the trees. Every effect passes the policy gate and budget meter; memory, learned route statistics and the audit log are thread-safe. `together`, `consensus` and `each … parallel N` run on real OS threads. |
 | `adapters.rs` | `http`, `fs`, `shell` and the `think` LLM call. |
+| `web.rs` | Backend and frontend frameworks: a small HTTP/1.1 server on `std::net` (thread per connection), route matching with `:params`, the server-side page renderer with a ~3 KB script, and the approvals inbox. No web dependencies. |
 | `info.rs` | Canonical JSON text and zlib description length, byte-compatible with the Python runtime, so `attend`, `novelty` and `simplest` give identical answers in both. |
 
 Engineering choices:
