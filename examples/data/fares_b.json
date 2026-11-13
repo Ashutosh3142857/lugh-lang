@@ -1,0 +1,6 @@
+[
+  {"airline": "Emirates", "depart": "2026-12-04", "price": 48200, "stops": 1},
+  {"airline": "Qatar Airways", "depart": "2026-12-04", "price": 43950, "stops": 1},
+  {"airline": "Etihad", "depart": "2026-12-05", "price": 41800, "stops": 1},
+  {"airline": "Turkish Airlines", "depart": "2026-12-05", "price": 44500, "stops": 1}
+]

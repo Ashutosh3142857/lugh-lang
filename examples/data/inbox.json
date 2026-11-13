@@ -1,0 +1,6 @@
+[
+  {"from": "newsletter@techdigest.io", "subject": "This week in AI", "body": "Ten links you missed. New models, new benchmarks."},
+  {"from": "accounts@northwind.co", "subject": "Invoice INV-2041 overdue", "body": "Hello, invoice INV-2041 for INR 58,000 is now overdue. Payment is due by 30 November 2026. Please confirm the transfer date."},
+  {"from": "team@calendar.app", "subject": "Standup moved", "body": "Tomorrow's standup moves to 10:30."},
+  {"from": "billing@cloudhost.com", "subject": "Payment due for November", "body": "Your November bill of USD 120 is due. Auto-pay is off for this account."}
+]

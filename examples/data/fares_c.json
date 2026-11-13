@@ -1,0 +1,4 @@
+[
+  {"airline": "Etihad", "depart": "2026-12-05", "price": 39900, "stops": 1},
+  {"airline": "Emirates", "depart": "2026-12-04", "price": 48200, "stops": 1}
+]

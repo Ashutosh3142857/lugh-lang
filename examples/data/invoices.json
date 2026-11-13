@@ -1,0 +1,5 @@
+[
+  {"id": "INV-2039", "client": "Contoso", "amount": 42000},
+  {"id": "INV-2040", "client": "Fabrikam", "amount": 17500},
+  {"id": "INV-2041", "client": "Northwind", "amount": 58000}
+]

@@ -1,0 +1,62 @@
+# Lugh v0.2 demo: the research-inspired primitives, all running offline.
+
+agent ResearchDesk
+  use fs, http, llm
+  budget time 2m, calls 60
+  policy
+    allow read, write
+    ask human before send, spend, execute
+    deny delete
+
+  goal "Triage the inbox and extract grounded facts"
+    let inbox = fs.read "examples/data/inbox.json" as json
+    # attention: keep only what is relevant to the query
+    let urgent = attend to inbox by "invoice overdue payment due" top 2
+    each mail in urgent
+      log "Priority: {mail.subject}"
+    # pointer: the answer is a verbatim span of the source, never invented
+    let first = urgent.0
+    let deadline = point to "payment due by date" in first.body
+    ensure deadline else stop "No deadline found in the source"
+    log "Grounded deadline: {deadline}"
+    # gated memory: this fact is forgotten after 7 days
+    remember "northwind_deadline" = deadline keep 7d
+    # content-addressed memory: find by meaning, not exact key
+    let found = recall like "northwind payment deadline"
+    log "Recalled: {found}"
+
+  goal "Reconcile invoices against bank payments"
+    let invoices = fs.read "examples/data/invoices.json" as json
+    let payments = fs.read "examples/data/payments.json" as json
+    # relational reasoning: every pair that satisfies the relation
+    let matched = pairs i from invoices, p from payments where i.client == p.payer and i.amount == p.amount
+    let n = count matched
+    log "Fully paid: {n} invoice(s)"
+    # pipelined loop: four workers stream the matches
+    each m in matched parallel 4
+      fs.append "examples/data/reconciled.log" m
+
+  goal "Choose a fare the sources agree on"
+    # ensemble: accept a value only if most sources agree
+    let fare = consensus
+      pick lowest price from fs.read "examples/data/fares_a.json" as json
+      pick lowest price from fs.read "examples/data/fares_b.json" as json
+      pick lowest price from fs.read "examples/data/fares_c.json" as json
+    log "Agreed fare: {fare.airline} at INR {fare.price}"
+    # adaptive routes: the order is learned from past runs
+    let quotes = attempt auto
+      http.get "https://api.flights.example/quote" as json
+      fs.read "examples/data/fares_a.json" as json
+    # test-time sampling: several samples, majority answer
+    let verdict = think "Is this a good fare? Answer in one line." with fare samples 3
+    # residual refinement: keep a draft only if it passes, else keep the original
+    let note = "Book"
+    refine note with think "Write a one-line booking note" with fare until count note > 20 rounds 2
+    log note
+    # minimum description length: prefer the simplest adequate plan
+    let plans = ["Book the agreed fare now", "Track 14 sites daily, wait for a price drop, then book whichever airline is cheapest on a Tuesday"]
+    let plan = simplest of plans
+    log "Plan: {plan}"
+    # compression novelty: how new is this fare compared with memory?
+    let fresh = novelty fare
+    log "Novelty vs memory: {fresh}"
