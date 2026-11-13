@@ -15,3 +15,6 @@ examples/bookings.log
 .vscode/
 lugh_stats.json
 examples/data/reconciled.log
+bench/peakrss
+core/target/
+bench/data/
