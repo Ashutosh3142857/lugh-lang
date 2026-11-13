@@ -251,6 +251,17 @@ An adapter is one class: a map of `verb → effect` and a `call(verb, args)` met
 9. **Trust (v1.0)** — TLS, user accounts and roles for served apps, signed audit logs, shareable policy packs, automatic fallback ladder
 10. **Platform** — hosted runtime, adapter marketplace, team approvals
 
+## Support Lugh
+
+Lugh is free and open source. If it's useful to you, you can support its
+development with Bitcoin:
+
+```
+bc1q3w9542hnh4qykqnfsjg9dcq49fhm8dtuwtydhy
+```
+
+Contributions of code, examples, adapters and bug reports are just as welcome.
+
 ## License
 
 [MIT](LICENSE) © 2026 Ashutosh Pandey
