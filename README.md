@@ -254,11 +254,14 @@ An adapter is one class: a map of `verb → effect` and a `call(verb, args)` met
 ## Support Lugh
 
 Lugh is free and open source. If it's useful to you, you can support its
-development with Bitcoin:
+development:
 
-```
-bc1q3w9542hnh4qykqnfsjg9dcq49fhm8dtuwtydhy
-```
+| Network | Address |
+| --- | --- |
+| Bitcoin | `bc1q3w9542hnh4qykqnfsjg9dcq49fhm8dtuwtydhy` |
+| Ethereum | `0x15b4939bcf8c8FA80c320566c4d9D49c9078e1C2` |
+
+Please send each coin only on its own network.
 
 Contributions of code, examples, adapters and bug reports are just as welcome.
 
