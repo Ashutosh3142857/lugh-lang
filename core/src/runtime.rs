@@ -615,6 +615,13 @@ impl Runtime {
                 Ok(v)
             }
             Stmt::Stop(e) => Err(Flow::Stop(self.interp(&txt(&self.eval(e, env)?), env))),
+            Stmt::Expect { cond, src } => {
+                if truthy(&self.eval(cond, env)?) {
+                    Ok(Value::Bool(true))
+                } else {
+                    fail(format!("expected {src}"))
+                }
+            }
             Stmt::Respond { status, body } => {
                 let v = self.eval(body, env)?;
                 Err(Flow::Respond(*status, v))
@@ -719,8 +726,23 @@ impl Runtime {
             List(v) => Value::Array(v.iter().map(|x| self.eval(x, env)).collect::<R<_>>()?),
             Var(parts) => self.lookup_parts(parts, env)?,
             Not(a) => Value::Bool(!truthy(&self.eval(a, env)?)),
-            And(a, b) => Value::Bool(truthy(&self.eval(a, env)?) && truthy(&self.eval(b, env)?)),
-            Or(a, b) => Value::Bool(truthy(&self.eval(a, env)?) || truthy(&self.eval(b, env)?)),
+            // Like Python and JavaScript: `and`/`or` return an operand, so `n or 0` is a default.
+            And(a, b) => {
+                let x = self.eval(a, env)?;
+                if truthy(&x) {
+                    self.eval(b, env)?
+                } else {
+                    x
+                }
+            }
+            Or(a, b) => {
+                let x = self.eval(a, env)?;
+                if truthy(&x) {
+                    x
+                } else {
+                    self.eval(b, env)?
+                }
+            }
             Cmp(op, a, b) => {
                 if let (Some(x), Some(y)) = (Self::peek(a, env), Self::peek(b, env)) {
                     return Ok(Value::Bool(compare(op, x, y)));
@@ -872,6 +894,78 @@ impl Runtime {
                     None => return fail("simplest of an empty list"),
                 }
             }
+            Field(inner, key) => {
+                let v = self.eval(inner, env)?;
+                let got = match &v {
+                    Value::Array(a) => key.parse::<usize>().ok().and_then(|i| a.get(i)),
+                    Value::Object(o) => o.get(key),
+                    _ => None,
+                };
+                got.cloned().unwrap_or(Value::Null)
+            }
+            Obj(fields) => {
+                let mut o = serde_json::Map::new();
+                for (k, v) in fields {
+                    o.insert(k.clone(), self.eval(v, env)?);
+                }
+                Value::Object(o)
+            }
+            Fn { name, args } => {
+                let vals: Vec<Value> = args.iter().map(|a| self.eval(a, env)).collect::<R<_>>()?;
+                crate::stdlib::call(name, &vals).map_err(Flow::Fail)?
+            }
+            Filter { var, src, cond }
+            | Map {
+                var,
+                src,
+                out: cond,
+            } => {
+                let items = self.list(src, env)?;
+                let keep = matches!(e, Filter { .. });
+                let mut local = env.clone();
+                local.insert(var.clone(), Value::Null);
+                let mut out = Vec::with_capacity(items.len());
+                for item in items {
+                    *local.get_mut(var).unwrap() = item;
+                    let v = self.eval(cond, &local)?;
+                    if keep {
+                        if truthy(&v) {
+                            out.push(std::mem::take(local.get_mut(var).unwrap()));
+                        }
+                    } else {
+                        out.push(v);
+                    }
+                }
+                Value::Array(out)
+            }
+            Sort { src, field, desc } => {
+                let mut items = self.list(src, env)?;
+                items.sort_by(|x, y| {
+                    let (p, q) = (&x[field.as_str()], &y[field.as_str()]);
+                    let o = match (p.as_f64(), q.as_f64()) {
+                        (Some(a), Some(b)) => a.total_cmp(&b),
+                        _ => txt(p).cmp(&txt(q)),
+                    };
+                    if *desc {
+                        o.reverse()
+                    } else {
+                        o
+                    }
+                });
+                Value::Array(items)
+            }
+            Group { src, field } => {
+                let mut groups = serde_json::Map::new();
+                for item in self.list(src, env)? {
+                    let key = txt(&item[field.as_str()]);
+                    if let Value::Array(g) =
+                        groups.entry(key).or_insert_with(|| Value::Array(vec![]))
+                    {
+                        g.push(item);
+                    }
+                }
+                Value::Object(groups)
+            }
             Pairs { a, xs, b, ys, cond } => {
                 let (mut xs, mut ys) = (self.list(xs, env)?, self.list(ys, env)?);
                 let mut local = env.clone();
@@ -886,7 +980,7 @@ impl Runtime {
                         let hit = truthy(&self.eval(cond, &local)?);
                         *y = std::mem::take(local.get_mut(b).unwrap());
                         if hit {
-                            let mut m = Map::new();
+                            let mut m = serde_json::Map::new();
                             m.insert(a.clone(), local[a].clone());
                             m.insert(b.clone(), y.clone());
                             out.push(Value::Object(m));

@@ -71,13 +71,19 @@ pub fn tokenize(s: &str) -> Result<Vec<Tok>, String> {
             i = j;
             continue;
         }
+        // `.field` after a call, list or object: (…).name, […].0
+        if ch == '.' && i + 1 < c.len() && (c[i + 1].is_alphanumeric() || c[i + 1] == '_') {
+            out.push(Tok::Op(".".into()));
+            i += 1;
+            continue;
+        }
         let two: String = c[i..(i + 2).min(c.len())].iter().collect();
         if ["<=", ">=", "==", "!=", "->"].contains(&two.as_str()) {
             out.push(Tok::Op(two));
             i += 2;
             continue;
         }
-        if "<>+-*/=[],():".contains(ch) {
+        if "<>+-*/=[],():{}".contains(ch) {
             out.push(Tok::Op(ch.to_string()));
             i += 1;
             continue;
@@ -142,6 +148,38 @@ pub enum Expr {
         args: Vec<Expr>,
         cast: Option<String>,
     },
+    /// Field or index access on any value: `count_by(xs, "a").Etihad`, `check(x).0`.
+    Field(Box<Expr>, String),
+    /// Object literal: `{airline: "Etihad", price: 41800}`.
+    Obj(Vec<(String, Expr)>),
+    /// Standard-library function: `text.upper(x)`, `sum(xs)`.
+    Fn {
+        name: String,
+        args: Vec<Expr>,
+    },
+    /// `filter f in xs where f.price < 100`
+    Filter {
+        var: String,
+        src: Box<Expr>,
+        cond: Box<Expr>,
+    },
+    /// `map f in xs to f.price * 2`
+    Map {
+        var: String,
+        src: Box<Expr>,
+        out: Box<Expr>,
+    },
+    /// `sort xs by price [desc]`
+    Sort {
+        src: Box<Expr>,
+        field: String,
+        desc: bool,
+    },
+    /// `group xs by airline`
+    Group {
+        src: Box<Expr>,
+        field: String,
+    },
 }
 
 pub fn num(n: f64) -> Value {
@@ -160,8 +198,9 @@ pub struct Parser<'a> {
     adapters: &'a [String],
 }
 
-const STOP: [&str; 13] = [
-    "as", ")", ",", "]", "and", "or", "<", ">", "<=", ">=", "==", "!=", "where",
+const STOP: [&str; 17] = [
+    "as", ")", ",", "]", "}", "and", "or", "<", ">", "<=", ">=", "==", "!=", "where", "to", "by",
+    "desc",
 ];
 
 impl<'a> Parser<'a> {
@@ -253,6 +292,22 @@ impl<'a> Parser<'a> {
     }
 
     pub fn primary(&mut self) -> Result<Expr, String> {
+        let mut e = self.atom()?;
+        while self.peek_is(".") {
+            self.i += 1;
+            let key = match self.bump() {
+                Some(Tok::Name(n)) => n,
+                Some(Tok::Num(n)) => format!("{}", n as i64),
+                other => return Err(format!("expected a field name after '.', found {other:?}")),
+            };
+            for part in key.split('.') {
+                e = Expr::Field(Box::new(e), part.to_string());
+            }
+        }
+        Ok(e)
+    }
+
+    fn atom(&mut self) -> Result<Expr, String> {
         match self.bump().ok_or("unexpected end of expression")? {
             Tok::Num(n) => Ok(Expr::Lit(num(n))),
             Tok::Str(s) => Ok(Expr::Str(s)),
@@ -274,6 +329,29 @@ impl<'a> Parser<'a> {
                 }
                 self.i += 1;
                 Ok(Expr::List(v))
+            }
+            Tok::Op(o) if o == "-" => Ok(Expr::Bin(
+                "-".into(),
+                Box::new(Expr::Lit(Value::from(0))),
+                Box::new(self.primary()?),
+            )),
+            Tok::Op(o) if o == "{" => {
+                let mut fields = Vec::new();
+                while !self.peek_is("}") {
+                    let key = match self.bump() {
+                        Some(Tok::Name(k)) | Some(Tok::Str(k)) => k,
+                        other => return Err(format!("object key expected, found {other:?}")),
+                    };
+                    self.expect(":")?;
+                    fields.push((key, self.or()?));
+                    if self.peek_is(",") {
+                        self.i += 1;
+                    } else if !self.peek_is("}") {
+                        return Err("expected ',' or '}' in object".into());
+                    }
+                }
+                self.i += 1;
+                Ok(Expr::Obj(fields))
             }
             Tok::Name(n) => self.named(n),
             other => Err(format!("cannot parse near {other:?}")),
@@ -369,11 +447,63 @@ impl<'a> Parser<'a> {
                     cond: b(self.or()?),
                 });
             }
+            "filter" | "map" if matches!(self.t.get(self.i + 1), Some(Tok::Name(x)) if x == "in") =>
+            {
+                let var = self.name()?;
+                self.expect("in")?;
+                let src = b(self.primary()?);
+                return Ok(if n == "filter" {
+                    self.expect("where")?;
+                    Expr::Filter {
+                        var,
+                        src,
+                        cond: b(self.or()?),
+                    }
+                } else {
+                    self.expect("to")?;
+                    Expr::Map {
+                        var,
+                        src,
+                        out: b(self.or()?),
+                    }
+                });
+            }
+            "sort" | "group" if !self.peek_is("(") => {
+                let src = b(self.primary()?);
+                self.expect("by")?;
+                let field = self.name()?;
+                if n == "group" {
+                    return Ok(Expr::Group { src, field });
+                }
+                let desc = self.peek_is("desc");
+                if desc {
+                    self.i += 1;
+                }
+                return Ok(Expr::Sort { src, field, desc });
+            }
             "ask" if self.peek_is("human") => {
                 self.i += 1;
                 return Ok(Expr::AskHuman(b(self.primary()?)));
             }
             _ => {}
+        }
+        let is_adapter = n
+            .split_once('.')
+            .is_some_and(|(h, _)| self.adapters.iter().any(|a| a == h));
+        if self.peek_is("(") && !is_adapter {
+            self.i += 1;
+            let mut args = Vec::new();
+            while !self.peek_is(")") {
+                if self.done() {
+                    return Err(format!("unclosed '(' in call to {n}"));
+                }
+                args.push(self.or()?);
+                if self.peek_is(",") {
+                    self.i += 1;
+                }
+            }
+            self.i += 1;
+            return Ok(Expr::Fn { name: n, args });
         }
         if let Some((head, method)) = n.split_once('.') {
             if self.adapters.iter().any(|a| a == head) {
@@ -538,6 +668,11 @@ pub enum Stmt {
     Respond {
         status: u16,
         body: Expr,
+    },
+    /// `expect <cond>` inside a test block.
+    Expect {
+        cond: Expr,
+        src: String,
     },
 }
 
@@ -779,6 +914,13 @@ fn parse_stmt(ln: &Line, next: Option<&Line>, ad: &[String]) -> Result<(Stmt, bo
         }
         "log" => Ok((Stmt::Log(pe(rest)?), false)),
         "stop" => Ok((Stmt::Stop(pe(rest)?), false)),
+        "expect" => Ok((
+            Stmt::Expect {
+                cond: pe(rest)?,
+                src: rest.to_string(),
+            },
+            false,
+        )),
         "respond" => {
             let (status, body) = parse_respond(rest, ad)?;
             Ok((Stmt::Respond { status, body }, false))
@@ -818,6 +960,7 @@ pub fn calls_in_block(b: &Block, out: &mut Vec<(usize, String, String)>) {
             Stmt::Send { target, msg, .. } => ex.extend([target, msg]),
             Stmt::Log(e) | Stmt::Stop(e) => ex.push(e),
             Stmt::Respond { body, .. } => ex.push(body),
+            Stmt::Expect { cond, .. } => ex.push(cond),
         }
         for e in ex {
             calls_in_expr(e, *no, out);
@@ -874,6 +1017,15 @@ fn calls_in_expr(e: &Expr, no: usize, out: &mut Vec<(usize, String, String)>) {
             }
         }
         Pairs { xs, ys, cond, .. } => kids.extend([&**xs, &**ys, &**cond]),
+        Obj(fields) => kids.extend(fields.iter().map(|f| &f.1)),
+        Field(inner, _) => kids.push(inner),
+        Fn { name, args } => {
+            out.push((no, String::new(), name.clone()));
+            kids.extend(args.iter());
+        }
+        Filter { src, cond, .. } => kids.extend([&**src, &**cond]),
+        Map { src, out, .. } => kids.extend([&**src, &**out]),
+        Sort { src, .. } | Group { src, .. } => kids.push(src),
         Lit(_) | Str(_) | Var(_) => {}
     }
     for k in kids {

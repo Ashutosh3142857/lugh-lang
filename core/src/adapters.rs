@@ -7,7 +7,7 @@ use std::io::Write;
 use std::process::Command;
 use std::time::Duration;
 
-pub const KNOWN: [&str; 4] = ["http", "fs", "shell", "llm"];
+pub const KNOWN: [&str; 5] = ["http", "fs", "shell", "llm", "db"];
 
 pub fn effect_of(adapter: &str, method: &str) -> Option<&'static str> {
     Some(match (adapter, method) {
@@ -19,6 +19,8 @@ pub fn effect_of(adapter: &str, method: &str) -> Option<&'static str> {
         ("fs", "write") | ("fs", "append") => "write",
         ("fs", "delete") => "delete",
         ("shell", "run") => "execute",
+        ("db", "query") => "read",
+        ("db", "exec") => "write",
         _ => return None,
     })
 }
@@ -104,8 +106,66 @@ pub fn call(adapter: &str, method: &str, args: &[Value]) -> Result<Value, String
                 String::from_utf8_lossy(&out.stdout).trim().to_string(),
             ))
         }
+        ("db", m) => db(m, &txt(arg(0)?), args.get(1)),
         _ => Err(format!("{adapter} has no action '{method}'")),
     }
+}
+
+/// SQLite through the policy gate: `db.query` (read) returns rows as objects,
+/// `db.exec` (write) returns the number of changed rows. Parameters are always
+/// bound, never spliced into SQL. The file is LUGH_DB, or lugh.db by default.
+fn db(method: &str, sql: &str, params: Option<&Value>) -> Result<Value, String> {
+    use rusqlite::types::Value as Sql;
+    let path = std::env::var("LUGH_DB").unwrap_or_else(|_| "lugh.db".into());
+    let conn = rusqlite::Connection::open(&path).map_err(|e| e.to_string())?;
+    conn.busy_timeout(Duration::from_secs(5))
+        .map_err(|e| e.to_string())?;
+    let to_sql = |v: &Value| match v {
+        Value::Null => Sql::Null,
+        Value::Bool(b) => Sql::Integer(*b as i64),
+        Value::Number(n) => match n.as_i64() {
+            Some(i) => Sql::Integer(i),
+            None => Sql::Real(n.as_f64().unwrap_or(0.0)),
+        },
+        Value::String(s) => Sql::Text(s.clone()),
+        other => Sql::Text(other.to_string()),
+    };
+    let bound: Vec<Sql> = match params {
+        None | Some(Value::Null) => vec![],
+        Some(Value::Array(a)) => a.iter().map(to_sql).collect(),
+        Some(other) => vec![to_sql(other)],
+    };
+    let refs = rusqlite::params_from_iter(bound.iter());
+    if method == "exec" {
+        return conn
+            .execute(sql, refs)
+            .map(Value::from)
+            .map_err(|e| e.to_string());
+    }
+    if method != "query" {
+        return Err(format!("db has no action '{method}' (query, exec)"));
+    }
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let cols: Vec<String> = stmt.column_names().into_iter().map(String::from).collect();
+    let rows = stmt
+        .query_map(refs, |row| {
+            let mut obj = serde_json::Map::new();
+            for (i, c) in cols.iter().enumerate() {
+                let v = match row.get::<_, Sql>(i)? {
+                    Sql::Null => Value::Null,
+                    Sql::Integer(n) => Value::from(n),
+                    Sql::Real(f) => crate::parser::num(f),
+                    Sql::Text(t) => Value::String(t),
+                    Sql::Blob(b) => Value::String(format!("<{} bytes>", b.len())),
+                };
+                obj.insert(c.clone(), v);
+            }
+            Ok(Value::Object(obj))
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map(Value::Array)
+        .map_err(|e| e.to_string())
 }
 
 fn as_text(v: &Value) -> String {

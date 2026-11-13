@@ -191,6 +191,8 @@ struct Request {
     path: String,
     query: Map<String, Value>,
     body: Value,
+    bearer: Option<String>,
+    cookie_token: Option<String>,
 }
 
 fn split_path(p: &str) -> Vec<String> {
@@ -200,7 +202,7 @@ fn split_path(p: &str) -> Vec<String> {
         .collect()
 }
 
-fn url_decode(s: &str) -> String {
+pub fn url_decode(s: &str) -> String {
     let b = s.as_bytes();
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;
@@ -249,6 +251,7 @@ fn read_request(stream: &TcpStream) -> Result<Request, String> {
     let target = parts.next().ok_or("missing path")?;
     let (path, query) = target.split_once('?').unwrap_or((target, ""));
     let (mut length, mut json) = (0usize, false);
+    let (mut bearer, mut cookie_token) = (None, None);
     loop {
         let mut h = String::new();
         if reader.read_line(&mut h).map_err(|e| e.to_string())? == 0 || h.trim().is_empty() {
@@ -258,6 +261,19 @@ fn read_request(stream: &TcpStream) -> Result<Request, String> {
             match k.trim().to_ascii_lowercase().as_str() {
                 "content-length" => length = v.trim().parse().unwrap_or(0),
                 "content-type" => json = v.contains("json"),
+                "authorization" => {
+                    bearer = v
+                        .trim()
+                        .strip_prefix("Bearer ")
+                        .map(|t| t.trim().to_string())
+                }
+                "cookie" => {
+                    cookie_token = v
+                        .split(';')
+                        .filter_map(|c| c.trim().strip_prefix("lugh_token="))
+                        .next()
+                        .map(String::from)
+                }
                 _ => {}
             }
         }
@@ -280,6 +296,8 @@ fn read_request(stream: &TcpStream) -> Result<Request, String> {
         path: url_decode(path),
         query: parse_pairs(query),
         body,
+        bearer,
+        cookie_token,
     })
 }
 
@@ -288,7 +306,9 @@ fn reason(code: u16) -> &'static str {
         200 => "OK",
         201 => "Created",
         204 => "No Content",
+        303 => "See Other",
         400 => "Bad Request",
+        401 => "Unauthorized",
         403 => "Forbidden",
         404 => "Not Found",
         409 => "Conflict",
@@ -331,17 +351,58 @@ pub struct Server {
     rt: Runtime,
     routes: Vec<Route>,
     pages: Vec<Page>,
+    jobs: Vec<Job>,
     inbox: Arc<Approvals>,
+    token: Option<String>,
+}
+
+/// `every 10m` block: runs on its own thread while the server is up.
+pub struct Job {
+    pub every: Duration,
+    pub label: String,
+    pub body: Block,
+}
+
+pub fn parse_job(line: &Line, adapters: &[String]) -> Result<Job, String> {
+    let label = line.text["every".len()..].trim().to_string();
+    let (n, unit) = label.split_at(label.len().saturating_sub(1));
+    let n: u64 = n
+        .trim()
+        .parse()
+        .map_err(|_| format!("line {}: expected: every <n>s|m|h|d", line.no))?;
+    let secs = n * match unit {
+        "s" => 1,
+        "m" => 60,
+        "h" => 3600,
+        "d" => 86400,
+        _ => return Err(format!("line {}: expected: every <n>s|m|h|d", line.no)),
+    };
+    if secs == 0 {
+        return Err(format!("line {}: interval must be at least 1s", line.no));
+    }
+    Ok(Job {
+        every: Duration::from_secs(secs),
+        label,
+        body: crate::parser::parse_block(&line.children, adapters)?,
+    })
 }
 
 impl Server {
-    pub fn new(mut rt: Runtime, routes: Vec<Route>, pages: Vec<Page>) -> Self {
+    pub fn new(
+        mut rt: Runtime,
+        routes: Vec<Route>,
+        pages: Vec<Page>,
+        jobs: Vec<Job>,
+        token: Option<String>,
+    ) -> Self {
         let inbox = Arc::new(Approvals::default());
         rt.inbox = Some(inbox.clone());
         Server {
             rt,
             routes,
             pages,
+            jobs,
+            token,
             inbox,
         }
     }
@@ -356,7 +417,40 @@ impl Server {
             println!("   PAGE   {}  ({})", p.path, p.title);
         }
         println!("   INBOX  /_lugh/inbox");
+        for j in &self.jobs {
+            println!("   EVERY  {}", j.label);
+        }
+        println!(
+            "   AUTH   {}",
+            if self.token.is_some() {
+                "token required"
+            } else {
+                "off (localhost only is recommended)"
+            }
+        );
         let server = Arc::new(self);
+        for i in 0..server.jobs.len() {
+            let server = server.clone();
+            std::thread::spawn(move || loop {
+                let job = &server.jobs[i];
+                std::thread::sleep(job.every);
+                let rt = server.rt.fork();
+                rt.audit("job_start", serde_json::json!({"every": job.label}));
+                let mut env = Env::default();
+                let outcome = match rt.run_block(&job.body, &mut env) {
+                    Ok(_) | Err(Flow::Respond(..)) => "done".to_string(),
+                    Err(Flow::Stop(m)) => format!("stopped: {m}"),
+                    Err(Flow::Fail(m)) | Err(Flow::Denied(m)) | Err(Flow::Budget(m)) => {
+                        format!("failed: {m}")
+                    }
+                };
+                rt.audit(
+                    "job_end",
+                    serde_json::json!({"every": job.label, "outcome": outcome}),
+                );
+                rt.save();
+            });
+        }
         for conn in listener.incoming() {
             let Ok(stream) = conn else { continue };
             let server = server.clone();
@@ -374,6 +468,29 @@ impl Server {
             Err(e) => return error(stream, 400, &e),
         };
         let segs = split_path(&req.path);
+
+        if let Some(expected) = &self.token {
+            let ok = |t: &Option<String>| t.as_deref().is_some_and(|t| constant_eq(t, expected));
+            // A browser can't send a header on a plain link, so `?token=` sets a cookie once.
+            if let Some(Value::String(q)) = req.query.get("token") {
+                if constant_eq(q, expected) {
+                    let head = format!(
+                        "HTTP/1.1 303 See Other\r\nLocation: {}\r\nSet-Cookie: lugh_token={q}; HttpOnly; SameSite=Strict; Path=/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                        req.path
+                    );
+                    let mut w = stream;
+                    let _ = w.write_all(head.as_bytes());
+                    return;
+                }
+            }
+            if !(ok(&req.bearer) || ok(&req.cookie_token)) {
+                self.rt.audit(
+                    "unauthorized",
+                    serde_json::json!({"method": req.method, "path": req.path}),
+                );
+                return error(stream, 401, "authentication required: send 'Authorization: Bearer <token>' or open a page with ?token=<token>");
+            }
+        }
 
         // Built-in endpoints.
         match (
@@ -479,6 +596,14 @@ impl Server {
         rt.save();
         send_value(stream, code, &body);
     }
+}
+
+fn constant_eq(a: &str, b: &str) -> bool {
+    a.len() == b.len()
+        && a.bytes()
+            .zip(b.bytes())
+            .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+            == 0
 }
 
 fn tail_audit(n: usize) -> Value {

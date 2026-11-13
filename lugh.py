@@ -709,8 +709,13 @@ class Runtime:
         if k == "list": return [self.eval(x, env) for x in node[1]]
         if k == "var": return self.lookup(node[1], env)
         if k == "not": return not self.truthy(self.eval(node[1], env))
-        if k == "and": return self.truthy(self.eval(node[1], env)) and self.truthy(self.eval(node[2], env))
-        if k == "or":  return self.truthy(self.eval(node[1], env)) or self.truthy(self.eval(node[2], env))
+        # `and`/`or` return an operand (as in Python and JavaScript), so `n or 0` works as a default.
+        if k == "and":
+            a = self.eval(node[1], env)
+            return self.eval(node[2], env) if self.truthy(a) else a
+        if k == "or":
+            a = self.eval(node[1], env)
+            return a if self.truthy(a) else self.eval(node[2], env)
         if k == "cmp":
             a, b = self.eval(node[2], env), self.eval(node[3], env)
             return {"<": a < b, ">": a > b, "<=": a <= b, ">=": a >= b, "==": a == b, "!=": a != b}[node[1]]

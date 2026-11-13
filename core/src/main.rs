@@ -6,12 +6,14 @@
 //!   lugh program.lugh --check    list every action the program can take and its policy
 //!   lugh program.lugh --eval     run and print a simplicity-weighted score
 //!   lugh program.lugh --quiet    print only results and errors
-//!   lugh program.lugh --serve 8080   serve its routes, pages and approvals inbox
+//!   lugh program.lugh --serve 8080   serve its routes, pages, scheduled jobs and inbox
+//!   lugh program.lugh --test     run its `test` blocks
 
 mod adapters;
 mod info;
 mod parser;
 mod runtime;
+mod stdlib;
 mod web;
 
 use parser::{build_tree, calls_in_block, parse_block, parse_expr, walk, Block, Line};
@@ -32,12 +34,45 @@ struct Program {
     goals: Vec<Goal>,
     routes: Vec<web::Route>,
     pages: Vec<web::Page>,
+    tests: Vec<Goal>,
+    jobs: Vec<web::Job>,
+    auth_env: Option<String>,
+}
+
+fn quoted(s: &str) -> Option<String> {
+    match parse_expr(s.trim(), &[]) {
+        Ok(parser::Expr::Str(s)) => Some(s),
+        _ => None,
+    }
+}
+
+fn block_source(lines: &[Line]) -> String {
+    let mut src = Vec::new();
+    walk(lines, &mut src);
+    src.join("\n")
+}
+
+/// Compile-time check: every standard-library function a program calls must exist.
+fn check_functions(body: &Block) -> Result<(), String> {
+    let mut calls = Vec::new();
+    calls_in_block(body, &mut calls);
+    for (no, adapter, name) in calls {
+        if adapter.is_empty() && !stdlib::exists(&name) {
+            return Err(format!(
+                "line {no}: unknown function '{name}' (see docs/STDLIB.md)"
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn setup(rt: &mut Runtime, top: &Line) -> Result<Program, String> {
     let mut goal_lines = Vec::new();
     let mut route_lines = Vec::new();
     let mut pages = Vec::new();
+    let mut test_lines = Vec::new();
+    let mut job_lines = Vec::new();
+    let mut auth_env = None;
     for node in &top.children {
         let head = node.text.split_whitespace().next().unwrap_or("");
         let rest = node.text[head.len()..].trim();
@@ -111,6 +146,19 @@ fn setup(rt: &mut Runtime, top: &Line) -> Result<Program, String> {
             "goal" => goal_lines.push(node),
             "route" => route_lines.push(node),
             "page" => pages.push(web::parse_page(node)?),
+            "test" => test_lines.push(node),
+            "every" => job_lines.push(node),
+            "auth" => {
+                // auth token env "LUGH_TOKEN"
+                let name = rest
+                    .strip_prefix("token env ")
+                    .and_then(quoted)
+                    .ok_or(format!(
+                        "line {}: expected: auth token env \"VARIABLE\"",
+                        node.no
+                    ))?;
+                auth_env = Some(name);
+            }
             other => {
                 return Err(format!(
                     "line {}: expected use/budget/policy/goal/route/page, got '{other}'",
@@ -137,13 +185,44 @@ fn setup(rt: &mut Runtime, top: &Line) -> Result<Program, String> {
         .into_iter()
         .map(|r| web::parse_route(r, &rt.adapters))
         .collect::<Result<Vec<_>, _>>()?;
-    if goals.is_empty() && routes.is_empty() && pages.is_empty() {
-        return Err("nothing to run: add a goal, route or page".into());
+    let mut tests = Vec::new();
+    for t in test_lines {
+        let text =
+            quoted(&t.text[4..]).ok_or(format!("line {}: test needs a quoted name", t.no))?;
+        tests.push(Goal {
+            text,
+            body: parse_block(&t.children, &rt.adapters)?,
+            source: block_source(&t.children),
+        });
+    }
+    let jobs = job_lines
+        .into_iter()
+        .map(|j| web::parse_job(j, &rt.adapters))
+        .collect::<Result<Vec<_>, _>>()?;
+    let bodies = goals
+        .iter()
+        .chain(&tests)
+        .map(|g| &g.body)
+        .chain(routes.iter().map(|r| &r.body))
+        .chain(jobs.iter().map(|j| &j.body));
+    for body in bodies {
+        check_functions(body)?;
+    }
+    if goals.is_empty()
+        && routes.is_empty()
+        && pages.is_empty()
+        && tests.is_empty()
+        && jobs.is_empty()
+    {
+        return Err("nothing to run: add a goal, route, page, job or test".into());
     }
     Ok(Program {
         goals,
         routes,
         pages,
+        tests,
+        jobs,
+        auth_env,
     })
 }
 
@@ -202,7 +281,7 @@ fn main() -> ExitCode {
         for body in bodies {
             let mut calls = Vec::new();
             calls_in_block(body, &mut calls);
-            for (no, a, m) in calls {
+            for (no, a, m) in calls.into_iter().filter(|c| !c.1.is_empty()) {
                 let eff = adapters::effect_of(&a, &m).unwrap_or("unknown");
                 let rule = if rt.deny.contains(eff) {
                     "DENIED"
@@ -221,6 +300,38 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
+    if flag("--test") {
+        rt.auto_yes = true;
+        rt.quiet = !flag("--verbose");
+        let (mut passed, mut failed) = (0, 0);
+        println!();
+        for t in &program.tests {
+            let mut env = runtime::Env::default();
+            let started = std::time::Instant::now();
+            match rt.run_block(&t.body, &mut env) {
+                Ok(_) | Err(Flow::Respond(..)) => {
+                    passed += 1;
+                    println!(
+                        "  ✓ {}  ({:.1} ms)",
+                        t.text,
+                        started.elapsed().as_secs_f64() * 1000.0
+                    );
+                }
+                Err(Flow::Fail(m)) | Err(Flow::Stop(m)) | Err(Flow::Denied(m))
+                | Err(Flow::Budget(m)) => {
+                    failed += 1;
+                    println!("  ✗ {}\n      {m}", t.text);
+                }
+            }
+        }
+        println!("\n{passed} passed, {failed} failed");
+        return if failed == 0 && passed > 0 {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::from(1)
+        };
+    }
+
     if let Some(i) = args.iter().position(|a| a == "--serve") {
         let port = args
             .get(i + 1)
@@ -232,7 +343,17 @@ fn main() -> ExitCode {
         } else {
             "127.0.0.1"
         };
-        let server = web::Server::new(rt, program.routes, program.pages);
+        let token = match &program.auth_env {
+            Some(var) => match stdlib::call("env", &[serde_json::Value::String(var.clone())]) {
+                Ok(serde_json::Value::String(t)) if t.len() >= 16 => Some(t),
+                _ => {
+                    eprintln!("❌ auth is on but {var} is not set to a token of at least 16 characters; refusing to start");
+                    return ExitCode::from(1);
+                }
+            },
+            None => None,
+        };
+        let server = web::Server::new(rt, program.routes, program.pages, program.jobs, token);
         if let Err(e) = server.listen(&format!("{host}:{port}")) {
             eprintln!("❌ cannot listen on {host}:{port}: {e}");
             return ExitCode::from(1);
