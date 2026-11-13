@@ -1,4 +1,4 @@
-# Lugh Language Specification — v0.4
+# Lugh Language Specification — v0.5
 
 ## Program structure
 
@@ -16,7 +16,9 @@ agent <Name>
     <statements>
 ```
 
-A program may declare several goals; they run in order.
+A program may declare several goals; they run in order. Lugh Core also accepts
+`test "<name>"`, `every <n>s|m|h|d`, `route`, `page` and `auth token env "<VAR>"`
+at the top level (see [STDLIB](STDLIB.md) and the Web section below).
 
 ## Header
 
@@ -47,15 +49,19 @@ A program may declare several goals; they run in order.
 | `remember "<key>" = <expr> [keep <n>s/m/h/d]` | Persist a value across runs, optionally expiring. |
 | `send <channel> <target> <message>` | Deliver a message (effect: `send`). Channels: `console`, `file`; others via MCP from v0.2. |
 | `log <expr>` | Record a note. |
+| `expect <cond>` | In a `test` block: fail the test if false. |
 | `stop "<msg>"` | End the goal cleanly. |
 
 ## Expressions
 
 | Form | Example |
 | --- | --- |
-| Literals | `42`, `3.5`, `"text"`, `true`, `false`, `none`, `[1, 2]` |
+| Literals | `42`, `-3.5`, `"text"`, `true`, `false`, `none`, `[1, 2]`, `{airline: "Etihad", price: 41800}` |
+| Field access on any value | `list.count_by(xs, "a").Etihad`, `schema.check(x, s).0` |
+| Function call | `upper(s)`, `stats.median(xs)` (see [STDLIB](STDLIB.md)) |
+| Collections | `filter x in xs where …`, `map x in xs to …`, `sort xs by f [desc]`, `group xs by f` |
 | Field access | `best.price`, `fares.0.airline` |
-| Operators | `+ - * /`, `< > <= >= == !=`, `and or not` |
+| Operators | `+ - * /`, `< > <= >= == !=`, `and or not` (`and`/`or` return an operand, so `n or 0` gives a default) |
 | Adapter call | `http.get "https://…" as json` |
 | Conversion | `as json`, `as text`, `as lines`, `as number` |
 | Selection | `pick lowest price from fares`, `pick highest score from items` |

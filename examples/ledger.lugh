@@ -1,0 +1,46 @@
+# Expense ledger: SQLite storage, schema validation, token auth, a scheduled
+# job, CSV export and a web UI, in one file.
+#
+#   export LUGH_TOKEN=$(openssl rand -hex 16)
+#   ./core/target/release/lugh examples/ledger.lugh --serve 8080
+#   open "http://127.0.0.1:8080/?token=$LUGH_TOKEN"
+
+agent Ledger
+  use db
+  auth token env "LUGH_TOKEN"
+  budget time 30s, calls 20
+  policy
+    allow read, write
+    deny delete
+
+  route POST "/api/expenses"
+    let e = request.body
+    let errors = schema.check(e, {title: "text 2..80", amount: "number 0.01..1000000", date: "date"})
+    ensure count(errors) == 0 else respond 422 {errors: errors}
+    db.exec "CREATE TABLE IF NOT EXISTS expenses (id TEXT PRIMARY KEY, title TEXT, amount REAL, date TEXT)"
+    db.exec "INSERT INTO expenses VALUES (?, ?, ?, ?)" [uuid(), trim(e.title), e.amount, e.date]
+    respond 201 e
+
+  route GET "/api/expenses"
+    db.exec "CREATE TABLE IF NOT EXISTS expenses (id TEXT PRIMARY KEY, title TEXT, amount REAL, date TEXT)"
+    respond db.query "SELECT title, amount, date FROM expenses ORDER BY date DESC"
+
+  route GET "/api/summary"
+    let rows = db.query "SELECT amount FROM expenses"
+    let amounts = map r in rows to r.amount
+    respond {total: math.round(sum(amounts), 2), count: count(rows), median: stats.median(amounts)}
+
+  route GET "/api/export.csv"
+    respond csv.text(db.query "SELECT title, amount, date FROM expenses ORDER BY date", ["title", "amount", "date"])
+
+  # Every hour, record a snapshot of the running total.
+  every 1h
+    let rows = db.query "SELECT amount FROM expenses"
+    remember "ledger_total" = sum(map r in rows to r.amount)
+
+  page "/" title "Expenses"
+    stat from "/api/summary" field total label "Total spent"
+    table from "/api/expenses" columns title, amount, date
+    heading "Add an expense"
+    form to "/api/expenses" fields title, amount, date submit "Add expense"
+    link "Download CSV" to "/api/export.csv"

@@ -91,6 +91,32 @@ Run the full demo:
 python lugh.py examples/research_desk.lugh --yes --eval
 ```
 
+## Standard library
+
+Lugh Core ships with what most projects pull in from the Python and JavaScript
+ecosystems: strings and regex, collections, maths and statistics, dates, JSON
+and CSV, hashing and UUIDs, schema validation, templates, SQLite, a test runner,
+scheduled jobs and token auth. See the [standard library reference](docs/STDLIB.md).
+
+```lugh
+let cheap  = filter f in fares where f.price < 44000
+let ranked = sort cheap by price
+let errors = schema.check(request.body, {title: "text 2..80", amount: "number 0.01..1000000"})
+db.exec "INSERT INTO expenses VALUES (?, ?, ?)" [uuid(), e.title, e.amount]
+let report = csv.text(db.query "SELECT * FROM expenses")
+
+test "only cheap fares"
+  expect count(cheap) == 3
+```
+
+```bash
+./core/target/release/lugh examples/stdlib_test.lugh --test   # 13 passed, 0 failed
+```
+
+[`examples/ledger.lugh`](examples/ledger.lugh) puts it together: an expense
+tracker with a database, validation, token auth, an hourly job, CSV export and
+a web UI, in about 50 lines.
+
 ## Full-stack apps: routes, pages and a human in the loop
 
 One `.lugh` file can be an API, a web UI and an approval workflow
@@ -126,9 +152,10 @@ styles and script) with no build step.
 | | Python reference (`lugh.py`) | Lugh Core (`core/`, Rust) |
 | --- | --- | --- |
 | Use it for | Prototyping, the browser adapter | Production, scale, embedding |
-| Install | Python 3.9+ | One 2.4 MB binary, libc only |
+| Install | Python 3.9+ | One 5.9 MB binary (SQLite included), libc only |
 | Adapters | http, fs, shell, browser, llm | http, fs, shell, llm |
-| Web (routes, pages, inbox) | — | Yes |
+| Web (routes, pages, inbox, auth, jobs) | — | Yes |
+| Standard library, `test` blocks | Core language only | Yes |
 
 Both runtimes produce identical results on the bundled examples.
 
@@ -139,8 +166,8 @@ repeated runs; peak memory of the measured process alone):
 
 | Workload | Python | Lugh Core | Speed-up | Memory |
 | --- | --- | --- | --- | --- |
-| Startup (`bench/hello.lugh`) | 80 ms, 22.3 MB | 2.9 ms, 4.3 MB | 27.7× | 5.2× less |
-| 1,000,000 relational comparisons + attention over 3,000 emails (`bench/heavy.lugh`) | 2,079 ms, 26.2 MB | 271 ms, 13.7 MB | 7.7× | 1.9× less |
+| Startup (`bench/hello.lugh`) | 79 ms, 22.3 MB | 2.9 ms, 4.8 MB | 27× | 4.6× less |
+| 1,000,000 relational comparisons + attention over 3,000 emails (`bench/heavy.lugh`) | 1,925 ms, 26.2 MB | 321 ms, 14.9 MB | 6.0× | 1.8× less |
 
 Numbers vary by machine. An agent's wall-clock time is usually dominated by
 network and model latency; Core's advantage is cheap startup, a small footprint
@@ -180,6 +207,7 @@ An adapter is one class: a map of `verb → effect` and a `call(verb, args)` met
 
 - [Language specification](docs/SPEC.md)
 - [From research to runtime](docs/RESEARCH.md): how 30 foundational papers map to Lugh
+- [Standard library](docs/STDLIB.md): every module, mapped to its Python and JavaScript equivalents
 - [Lugh Core](core/README.md): the native Rust runtime
 
 ## Roadmap
@@ -187,11 +215,12 @@ An adapter is one class: a map of `verb → effect` and a `call(verb, args)` met
 1. **Learn (v0.2)** ✓ — research-derived primitives, adaptive routing, evaluation
 2. **Native (v0.3)** ✓ — Lugh Core: Rust runtime, compile-once execution, benchmarks
 3. **Full stack (v0.4)** ✓ — routes, pages, approvals inbox, end-to-end tests
-4. **Compile (v0.5)** — bytecode VM, field access compiled to fixed slots, WebAssembly build
-5. **Connect (v0.6)** — MCP client in Core, editor syntax support, multi-agent message passing
-6. **Reach (v0.7)** — desktop app adapter, screen fallback, spend metering
-7. **Trust (v1.0)** — authentication and TLS for served apps, signed audit logs, shareable policy packs, automatic fallback ladder
-8. **Platform** — hosted runtime, adapter marketplace, team approvals
+4. **Standard library (v0.5)** ✓ — 100+ functions, SQLite, tests, jobs, auth, object literals
+5. **Compile (v0.6)** — bytecode VM, field access compiled to fixed slots, WebAssembly build
+6. **Connect (v0.7)** — MCP client in Core, editor syntax support, multi-agent message passing
+7. **Reach (v0.8)** — desktop app adapter, screen fallback, spend metering
+8. **Trust (v1.0)** — TLS, user accounts and roles for served apps, signed audit logs, shareable policy packs, automatic fallback ladder
+9. **Platform** — hosted runtime, adapter marketplace, team approvals
 
 ## License
 
