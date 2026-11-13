@@ -57,6 +57,34 @@ Optional:
 - `pip install playwright && playwright install chromium` enables the `browser` adapter.
 - Set `ANTHROPIC_API_KEY` so `think` uses a real LLM instead of the local stub (`LUGH_MODEL` selects the model).
 
+## What's new in v0.2
+
+Primitives drawn from the foundational ML literature ([details](docs/RESEARCH.md)):
+
+```lugh
+let urgent   = attend to inbox by "invoice overdue" top 2      # attention
+let deadline = point to "payment due by date" in mail.body      # grounded extraction
+remember "deadline" = deadline keep 7d                          # gated memory
+let found    = recall like "northwind deadline"                 # content-addressed memory
+let matched  = pairs i from invoices, p from payments where i.amount == p.amount
+let fare     = consensus                                        # ensemble agreement
+  pick lowest price from fs.read "a.json" as json
+  pick lowest price from fs.read "b.json" as json
+let quote    = attempt auto                                     # learned route order
+  http.get "https://api.example.com/quote" as json
+  fs.read "cache.json" as json
+refine note with think "Improve this" with fare until count note > 20 rounds 2
+let plan     = simplest of plans                                # minimum description length
+let fresh    = novelty fare                                     # compression novelty
+each m in matched parallel 4                                    # pipelined loop
+```
+
+Run the full demo:
+
+```bash
+python lugh.py examples/research_desk.lugh --yes --eval
+```
+
 ## Effects and policy
 
 Every action belongs to one of seven effect types. Policy is written against these, so reviewing an agent means understanding seven words rather than every API it calls.
@@ -81,8 +109,8 @@ Anything not explicitly allowed requires approval, so a missing policy line make
 | `fs` | Local files | Working |
 | `shell` | Installed CLI tools | Working |
 | `browser` | Any website (Playwright) | Working |
-| `llm` | Reasoning via `think` | Working |
-| `mcp` | SaaS apps via Model Context Protocol | Planned (v0.2) |
+| `llm` | Reasoning via `think` (with `samples N`) | Working |
+| `mcp` | SaaS apps via Model Context Protocol | Planned (v0.3) |
 | `app` | Desktop software via OS accessibility APIs | Planned (v0.5) |
 
 An adapter is one class: a map of `verb → effect` and a `call(verb, args)` method.
@@ -90,13 +118,15 @@ An adapter is one class: a map of `verb → effect` and a `call(verb, args)` met
 ## Documentation
 
 - [Language specification](docs/SPEC.md)
+- [From research to runtime](docs/RESEARCH.md): how 30 foundational papers map to Lugh
 
 ## Roadmap
 
-1. **Connect (v0.2)** — MCP client, editor syntax support
-2. **Reach (v0.5)** — desktop app adapter, screen fallback, spend metering
-3. **Trust (v1.0)** — signed audit logs, shareable policy packs, automatic fallback ladder
-4. **Platform** — hosted runtime, adapter marketplace, team approvals
+1. **Learn (v0.2)** ✓ — research-derived primitives, adaptive routing, evaluation
+2. **Connect (v0.3)** — MCP client, editor syntax support, multi-agent message passing
+3. **Reach (v0.5)** — desktop app adapter, screen fallback, spend metering
+4. **Trust (v1.0)** — signed audit logs, shareable policy packs, automatic fallback ladder
+5. **Platform** — hosted runtime, adapter marketplace, team approvals
 
 ## License
 
