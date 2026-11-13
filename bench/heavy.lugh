@@ -1,0 +1,18 @@
+# CPU-bound workload: 1,000,000 relational comparisons + attention over 3,000 emails.
+agent Bench
+  use fs
+  budget time 30m, calls 100
+  policy
+    allow read
+
+  goal "Relational matching over one million pairs"
+    let invoices = fs.read "bench/data/invoices.json" as json
+    let payments = fs.read "bench/data/payments.json" as json
+    let matched = pairs i from invoices, p from payments where i.client == p.payer and i.amount == p.amount
+    let n = count matched
+    log "matches: {n}"
+
+  goal "Attention over three thousand emails"
+    let emails = fs.read "bench/data/emails.json" as json
+    let top = attend to emails by "overdue invoice payment deadline" top 5
+    log "top: {top.0.subject}"

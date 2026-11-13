@@ -1,0 +1,4 @@
+# Startup cost: the smallest possible program.
+agent Hello
+  goal "Say hello"
+    log "hello"
