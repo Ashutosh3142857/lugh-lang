@@ -172,3 +172,89 @@ fn web_app_routes_pages_and_approvals() {
     server.kill().ok();
     let _ = server.wait();
 }
+
+#[test]
+fn stdlib_suite_written_in_lugh() {
+    let _one = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    clean();
+    let _ = std::fs::remove_file(repo().join("lugh.db"));
+    let out = Command::new(env!("CARGO_BIN_EXE_lugh"))
+        .args(["examples/stdlib_test.lugh", "--test"])
+        .current_dir(repo())
+        .output()
+        .expect("run tests");
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "Lugh test suite failed:\n{text}");
+    assert!(text.contains("13 passed, 0 failed"), "{text}");
+}
+
+#[test]
+fn failing_lugh_test_exits_nonzero() {
+    let _one = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = std::env::temp_dir().join(format!("lugh-neg-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("neg.lugh"), "agent Neg\n  test \"fails\"\n    expect 1 == 2\n").unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_lugh")).args(["neg.lugh", "--test"]).current_dir(&dir).output().unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stdout).contains("0 passed, 1 failed"));
+}
+
+#[test]
+fn unknown_function_is_a_compile_error() {
+    let dir = std::env::temp_dir().join(format!("lugh-typo-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("typo.lugh"), "agent T\n  test \"t\"\n    expect text.uper(\"a\") == \"A\"\n").unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_lugh")).args(["typo.lugh", "--test"]).current_dir(&dir).output().unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("unknown function 'text.uper'"));
+}
+
+fn get(port: u16, path: &str, auth: Option<&str>) -> (u16, String) {
+    let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect");
+    let header = auth.map(|t| format!("Authorization: Bearer {t}\r\n")).unwrap_or_default();
+    write!(s, "GET {path} HTTP/1.1\r\nHost: x\r\n{header}\r\n").unwrap();
+    let mut raw = String::new();
+    s.read_to_string(&mut raw).unwrap();
+    (raw[9..12].parse().unwrap(), raw.split_once("\r\n\r\n").map(|x| x.1.to_string()).unwrap_or_default())
+}
+
+#[test]
+fn auth_token_and_scheduled_jobs() {
+    let _one = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = std::env::temp_dir().join(format!("lugh-auth-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("app.lugh"),
+        "agent A\n  auth token env \"TEST_LUGH_TOKEN\"\n  policy\n    allow read, write\n  every 1s\n    remember \"ticks\" = (recall \"ticks\" or 0) + 1\n  route GET \"/ticks\"\n    respond {ticks: recall \"ticks\"}\n",
+    )
+    .unwrap();
+    let port = 20_000 + (std::process::id() % 2000) as u16;
+
+    // Without the variable, the server must refuse to start.
+    let out = Command::new(env!("CARGO_BIN_EXE_lugh")).args(["app.lugh", "--serve", &port.to_string()]).current_dir(&dir).env_remove("TEST_LUGH_TOKEN").output().unwrap();
+    assert!(!out.status.success());
+
+    let token = "abcdef0123456789abcdef";
+    let mut server = Command::new(env!("CARGO_BIN_EXE_lugh"))
+        .args(["app.lugh", "--serve", &port.to_string()])
+        .current_dir(&dir)
+        .env("TEST_LUGH_TOKEN", token)
+        .stdout(Stdio::null())
+        .spawn()
+        .unwrap();
+    for _ in 0..50 {
+        if TcpStream::connect(("127.0.0.1", port)).is_ok() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert_eq!(get(port, "/ticks", None).0, 401);
+    assert_eq!(get(port, "/ticks", Some("wrong-token-0000000000")).0, 401);
+    std::thread::sleep(Duration::from_millis(2500));
+    let (code, body) = get(port, "/ticks", Some(token));
+    server.kill().ok();
+    let _ = server.wait();
+    assert_eq!(code, 200);
+    let ticks: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(ticks["ticks"].as_f64().unwrap_or(0.0) >= 2.0, "scheduler ticks: {body}");
+}

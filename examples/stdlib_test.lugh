@@ -1,0 +1,148 @@
+# The Lugh standard library, tested in Lugh itself.
+# Expected values were computed independently with Python's standard library
+# (hashlib, hmac, base64, statistics, datetime, urllib) and NumPy.
+#
+# Run:  ./core/target/release/lugh examples/stdlib_test.lugh --test
+
+agent StdlibTests
+  use db
+  budget time 1m, calls 50
+  policy
+    allow read, write
+
+  test "text: case, trim, split, join, replace"
+    expect upper("lugh") == "LUGH"
+    expect text.title("hello brave new world") == "Hello Brave New World"
+    expect trim("  padded  ") == "padded"
+    expect count(split("a,b,c", ",")) == 3
+    expect join(["a", "b", "c"], "-") == "a-b-c"
+    expect replace("2026-11-14", "-", "/") == "2026/11/14"
+    expect text.slice("Dublin", 0, 3) == "Dub"
+    expect text.slice("Dublin", -3) == "lin"
+    expect text.pad("7", 3, "0") == "007"
+    expect text.number("45,000") == 45000
+
+  test "text: regular expressions"
+    let mail = "Invoice INV-2041 is due by 30 November 2026"
+    expect text.matches(mail, "INV-[0-9]+")
+    expect text.find(mail, "INV-([0-9]+)") == "2041"
+    expect count(text.find_all("a1 b22 c333", "[0-9]+")) == 3
+    expect text.sub("call 555-1234 now", "[0-9]", "#") == "call ###-#### now"
+
+  test "collections: filter, map, sort, group"
+    let fares = [{airline: "Emirates", price: 48200}, {airline: "Etihad", price: 41800}, {airline: "Qatar", price: 43950}, {airline: "Etihad", price: 39900}]
+    let cheap = filter f in fares where f.price < 44000
+    expect count(cheap) == 3
+    let prices = map f in fares to f.price
+    expect sum(prices) == 173850
+    let ordered = sort fares by price
+    expect ordered.0.price == 39900
+    let priciest = sort fares by price desc
+    expect priciest.0.airline == "Emirates"
+    let by = group fares by airline
+    expect count(by.Etihad) == 2
+    expect list.count_by(fares, "airline").Etihad == 2
+
+  test "collections: list and object helpers"
+    expect unique([1, 2, 2, 3, 3, 3]) == [1, 2, 3]
+    expect list.flatten([[1, 2], [3], 4]) == [1, 2, 3, 4]
+    expect count(list.chunk(range(10), 3)) == 4
+    expect range(1, 4) == [1, 2, 3]
+    expect contains([1, 2, 3], 2)
+    expect list.pluck([{a: 1}, {a: 2}], "a") == [1, 2]
+    expect list.merge({a: 1}, {b: 2}).b == 2
+    expect list.get({user: {name: "Ash"}}, "user.name") == "Ash"
+    expect list.get({}, "missing", "default") == "default"
+    expect max([3, 9, 4]) == 9
+    expect min(5, 2, 8) == 2
+
+  test "math and statistics"
+    let xs = [2, 4, 4, 4, 5, 5, 7, 9]
+    expect stats.mean(xs) == 5
+    expect round(stats.stdev(xs), 6) == 2.13809
+    expect round(stats.variance(xs), 6) == 4.571429
+    expect stats.median([3, 1, 2, 10]) == 2.5
+    expect round(stats.percentile(range(1, 11), 90), 6) == 9.1
+    expect stats.mode(["a", "b", "b"]) == "b"
+    expect math.round(3.14159, 2) == 3.14
+    expect math.sqrt(144) == 12
+    expect math.clamp(120, 0, 100) == 100
+    let r = math.random_int(1, 6)
+    expect r >= 1 and r <= 6
+
+  test "time: calendar arithmetic in UTC"
+    expect time.add("2026-02-27", 2, "days") == "2026-03-01"
+    expect time.add("2024-02-28", 1, "day") == "2024-02-29"
+    expect time.add("2026-12-31T23:00:00Z", 2, "hours") == "2027-01-01T01:00:00Z"
+    expect time.diff("2026-01-01", "2026-12-25", "days") == 358
+    expect time.weekday("2026-11-14") == "Saturday"
+    expect time.weekday("1999-12-31") == "Friday"
+    expect time.format("2026-11-14T01:00:00+05:30") == "2026-11-13T19:30:00Z"
+    expect time.unix("2026-11-14") == 1794614400
+    expect time.start_of("2026-11-14", "week") == "2026-11-09"
+    expect time.start_of("2026-11-14", "month") == "2026-11-01"
+    expect text.matches(now(), "^[0-9]{4}-[0-9]{2}-[0-9]{2}T")
+
+  test "data formats: json and csv"
+    let data = json.parse("{\"a\": [1, 2, 3]}")
+    expect sum(data.a) == 6
+    expect json.text({b: 1}) == "{\"b\":1}"
+    let rows = csv.parse("name,price\n\"Air, India\",4500\nEtihad,41800\n")
+    expect count(rows) == 2
+    expect rows.0.name == "Air, India"
+    expect rows.1.price == 41800
+    let back = csv.text(rows, ["name", "price"])
+    expect text.contains(back, "\"Air, India\",4500")
+
+  test "crypto and encoding"
+    expect crypto.sha256("abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    expect crypto.hmac_sha256("key", "The quick brown fox jumps over the lazy dog") == "f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8"
+    expect encode.base64("hello world") == "aGVsbG8gd29ybGQ="
+    expect encode.unbase64("aGVsbG8gd29ybGQ=") == "hello world"
+    expect encode.url("a b&c=d/é") == "a%20b%26c%3Dd%2F%C3%A9"
+    expect encode.unurl("a%20b%26c") == "a b&c"
+    expect text.matches(uuid(), "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+    expect uuid() != uuid()
+    expect crypto.equal("token-abc", "token-abc")
+    expect not crypto.equal("token-abc", "token-abd")
+
+  test "schema validation"
+    let spec = {airline: "text 2..40", price: "number 1..100000", email: "email", "notes?": "text"}
+    let good = {airline: "Etihad", price: 41800, email: "ash@example.com"}
+    expect schema.valid(good, spec)
+    let bad = {airline: "E", price: -5, email: "not-an-email"}
+    let errors = schema.check(bad, spec)
+    expect count(errors) == 3
+    expect schema.check({price: 1}, spec).0 == "airline: required"
+
+  test "templates"
+    let page = template.render("Hi {{name}}! {{#fares}}[{{airline}} {{price}}]{{/fares}}{{^vip}} (standard){{/vip}}", {name: "Ash", fares: [{airline: "Etihad", price: 41800}], vip: false})
+    expect page == "Hi Ash! [Etihad 41800] (standard)"
+    expect template.render("{{x}}", {x: "<b>"}) == "&lt;b&gt;"
+    expect template.render("{{{x}}}", {x: "<b>"}) == "<b>"
+
+  test "database: SQLite with bound parameters"
+    db.exec "DROP TABLE IF EXISTS bookings"
+    db.exec "CREATE TABLE bookings (id INTEGER PRIMARY KEY, airline TEXT, price REAL)"
+    db.exec "INSERT INTO bookings (airline, price) VALUES (?, ?)" ["Etihad", 41800]
+    db.exec "INSERT INTO bookings (airline, price) VALUES (?, ?)" ["Robert'); DROP TABLE bookings;--", 1]
+    let rows = db.query "SELECT airline, price FROM bookings WHERE price > ? ORDER BY price" [1000]
+    expect count(rows) == 1
+    expect rows.0.airline == "Etihad"
+    let all = db.query "SELECT count(*) AS n FROM bookings"
+    expect all.0.n == 2
+
+  test "environment and types"
+    expect env("LUGH_SURELY_UNSET_VAR", "fallback") == "fallback"
+    expect type(1) == "number"
+    expect type("x") == "text"
+    expect type([1]) == "list"
+    expect type({a: 1}) == "object"
+
+  test "language: and / or return operands; object literals; field access"
+    let missing = none
+    expect (missing or 5) == 5
+    expect (0 and 1) == 0
+    expect ("x" and "y") == "y"
+    expect {a: {b: [10, 20]}}.a.b.1 == 20
+    expect -3 + 5 == 2
