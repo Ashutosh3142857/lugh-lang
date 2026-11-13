@@ -185,7 +185,7 @@ fn stdlib_suite_written_in_lugh() {
         .expect("run tests");
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(out.status.success(), "Lugh test suite failed:\n{text}");
-    assert!(text.contains("14 passed, 0 failed"), "{text}");
+    assert!(text.contains("15 passed, 0 failed"), "{text}");
 }
 
 #[test]
@@ -306,13 +306,25 @@ fn mcp_effects_follow_tool_annotations() {
         .output()
         .unwrap();
     let text = String::from_utf8_lossy(&out.stdout);
-    assert!(text.contains("Server offers: list_notes, add_note, delete_note"), "{text}");
-    assert!(text.contains("[submit] mcp.call notes add_note"), "add_note must need approval: {text}");
-    assert!(!text.contains("[read] mcp.call notes list_notes"), "list_notes is read-only and allowed");
+    assert!(
+        text.contains("Server offers: list_notes, add_note, delete_note"),
+        "{text}"
+    );
+    assert!(
+        text.contains("[submit] mcp.call notes add_note"),
+        "add_note must need approval: {text}"
+    );
+    assert!(
+        !text.contains("[read] mcp.call notes list_notes"),
+        "list_notes is read-only and allowed"
+    );
     assert!(text.contains("policy denies 'delete'"), "{text}");
     // The delete was stopped before reaching the server: both notes remain.
     let notes = std::fs::read_to_string(repo().join("examples/data/notes.json")).unwrap();
-    assert!(notes.contains("Biometrics") && notes.contains("Insurance"), "{notes}");
+    assert!(
+        notes.contains("Biometrics") && notes.contains("Insurance"),
+        "{notes}"
+    );
     notes_reset();
 }
 
@@ -338,11 +350,20 @@ fn plan_repairs_its_program_then_runs_safely() {
     }
     let plan_file = std::env::temp_dir().join(format!("lugh-plan-{}.lugh", std::process::id()));
     let out = Command::new(env!("CARGO_BIN_EXE_lugh"))
-        .args(["plan", "Add a passport photos reminder", "--use", "mcp", "--out"])
+        .args([
+            "plan",
+            "Add a passport photos reminder",
+            "--use",
+            "mcp",
+            "--out",
+        ])
         .arg(&plan_file)
         .args(["--run", "--yes"])
         .env("ANTHROPIC_API_KEY", "test")
-        .env("LUGH_LLM_URL", format!("http://127.0.0.1:{port}/v1/messages"))
+        .env(
+            "LUGH_LLM_URL",
+            format!("http://127.0.0.1:{port}/v1/messages"),
+        )
         .env("LUGH_MCP_CONFIG", "examples/lugh.mcp.json")
         .current_dir(repo())
         .output()
@@ -350,15 +371,28 @@ fn plan_repairs_its_program_then_runs_safely() {
     mock.kill().ok();
     let _ = mock.wait();
     let text = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success(), "{text}\n{}", String::from_utf8_lossy(&out.stderr));
-    assert!(text.contains("unknown function 'text.summarize'"), "first attempt should fail: {text}");
+    assert!(
+        out.status.success(),
+        "{text}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        text.contains("unknown function 'text.summarize'"),
+        "first attempt should fail: {text}"
+    );
     assert!(text.contains("repaired its program after 1"), "{text}");
     assert!(text.contains("Plan safety"), "{text}");
     assert!(text.contains("You have [\"Photos\"]"), "{text}");
     let requests = std::fs::read_to_string(&log).unwrap();
     assert_eq!(requests.lines().count(), 2);
-    assert!(requests.contains("add_note [submit]"), "the model must be told the real MCP tools");
-    assert!(requests.contains("does not compile"), "the compile error must be sent back");
+    assert!(
+        requests.contains("add_note [submit]"),
+        "the model must be told the real MCP tools"
+    );
+    assert!(
+        requests.contains("does not compile"),
+        "the compile error must be sent back"
+    );
     notes_reset();
 }
 
@@ -381,6 +415,9 @@ fn plan_safe_overrides_a_permissive_policy() {
         .output()
         .unwrap();
     let text = String::from_utf8_lossy(&out.stdout);
-    assert!(text.contains("policy denies 'delete'"), "plan safety must deny delete whatever the program says: {text}");
+    assert!(
+        text.contains("policy denies 'delete'"),
+        "plan safety must deny delete whatever the program says: {text}"
+    );
     notes_reset();
 }

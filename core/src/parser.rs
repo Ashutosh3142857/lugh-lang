@@ -564,24 +564,60 @@ fn strip_comment(raw: &str) -> &str {
     raw
 }
 
+/// Net bracket depth change of a line, ignoring brackets inside strings.
+fn bracket_delta(s: &str) -> i32 {
+    let (mut depth, mut in_str, mut escaped) = (0, false, false);
+    for ch in s.chars() {
+        match ch {
+            _ if escaped => escaped = false,
+            '\\' if in_str => escaped = true,
+            '"' => in_str = !in_str,
+            '(' | '[' | '{' if !in_str => depth += 1,
+            ')' | ']' | '}' if !in_str => depth -= 1,
+            _ => {}
+        }
+    }
+    depth
+}
+
 pub fn build_tree(src: &str) -> Vec<Line> {
-    let flat: Vec<Line> = src
-        .lines()
-        .enumerate()
-        .filter_map(|(n, raw)| {
-            let s = strip_comment(raw);
-            if s.trim().is_empty() {
-                return None;
+    // Physical lines → logical lines. As in Python, a line with an open bracket
+    // continues onto the following lines until the bracket closes, so lists and
+    // objects can span several lines.
+    let mut flat: Vec<Line> = Vec::new();
+    let mut open: Option<(Line, i32)> = None;
+    for (n, raw) in src.lines().enumerate() {
+        let s = strip_comment(raw);
+        if s.trim().is_empty() {
+            continue;
+        }
+        if let Some((mut line, depth)) = open.take() {
+            line.text.push(' ');
+            line.text.push_str(s.trim());
+            let depth = depth + bracket_delta(s);
+            if depth > 0 {
+                open = Some((line, depth));
+            } else {
+                flat.push(line);
             }
-            let indent = s.len() - s.trim_start_matches(' ').len();
-            Some(Line {
-                text: s.trim().to_string(),
-                indent,
-                no: n + 1,
-                children: vec![],
-            })
-        })
-        .collect();
+            continue;
+        }
+        let line = Line {
+            text: s.trim().to_string(),
+            indent: s.len() - s.trim_start_matches(' ').len(),
+            no: n + 1,
+            children: vec![],
+        };
+        let depth = bracket_delta(s);
+        if depth > 0 {
+            open = Some((line, depth));
+        } else {
+            flat.push(line);
+        }
+    }
+    if let Some((line, _)) = open {
+        flat.push(line); // unclosed bracket: the parser reports it with this line number
+    }
     fn build(items: &[Line], pos: &mut usize, parent: Option<usize>) -> Vec<Line> {
         let mut out = Vec::new();
         while *pos < items.len() && parent.is_none_or(|p| items[*pos].indent > p) {

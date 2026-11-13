@@ -154,3 +154,16 @@ agent StdlibTests
     expect "{items.0.price} and {upper(\"ok\")}" == "10 and OK"
     expect "literal {not an expression}" == "literal {not an expression}"
     expect "{json.text({a: 1})}" == "{\"a\":1}"
+
+  test "lists and objects can span several lines"
+    let fares = [
+      {airline: "Etihad", price: 41800},
+      {airline: "Qatar", price: 43950}
+    ]
+    let spec = {
+      airline: "text",
+      price: "number 1..100000"
+    }
+    expect count(fares) == 2
+    expect schema.valid(fares.1, spec)
+    expect "[brackets] in {text}" == "[brackets] in {text}"
