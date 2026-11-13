@@ -1,0 +1,25 @@
+# An agent working through an MCP server. Each tool's effect comes from its
+# MCP annotations: list_notes is read-only, add_note is a submit, delete_note
+# is destructive, and policy decides which of those may run.
+#
+# Run:  LUGH_MCP_CONFIG=examples/lugh.mcp.json ./core/target/release/lugh examples/notes_agent.lugh
+
+agent NotesAgent
+  use mcp
+  policy
+    allow read
+    ask human before submit
+    deny delete
+
+  goal "Capture the visa checklist as notes"
+    let tools = mcp.tools "notes"
+    log "Server offers: {tools.0.name}, {tools.1.name}, {tools.2.name}"
+    mcp.call "notes" "add_note" {title: "Biometrics", body: "Book the appointment"}
+    mcp.call "notes" "add_note" {title: "Insurance", body: "Buy travel cover"}
+    let notes = mcp.call "notes" "list_notes"
+    let titles = map n in notes to n.title
+    log "Notes now: {titles}"
+    ensure count(notes) >= 2 else stop "Notes were not saved"
+
+  goal "Deleting is blocked by policy"
+    mcp.call "notes" "delete_note" {title: "Insurance"}

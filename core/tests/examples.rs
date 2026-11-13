@@ -193,8 +193,16 @@ fn failing_lugh_test_exits_nonzero() {
     let _one = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let dir = std::env::temp_dir().join(format!("lugh-neg-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("neg.lugh"), "agent Neg\n  test \"fails\"\n    expect 1 == 2\n").unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_lugh")).args(["neg.lugh", "--test"]).current_dir(&dir).output().unwrap();
+    std::fs::write(
+        dir.join("neg.lugh"),
+        "agent Neg\n  test \"fails\"\n    expect 1 == 2\n",
+    )
+    .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_lugh"))
+        .args(["neg.lugh", "--test"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stdout).contains("0 passed, 1 failed"));
 }
@@ -203,19 +211,34 @@ fn failing_lugh_test_exits_nonzero() {
 fn unknown_function_is_a_compile_error() {
     let dir = std::env::temp_dir().join(format!("lugh-typo-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("typo.lugh"), "agent T\n  test \"t\"\n    expect text.uper(\"a\") == \"A\"\n").unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_lugh")).args(["typo.lugh", "--test"]).current_dir(&dir).output().unwrap();
+    std::fs::write(
+        dir.join("typo.lugh"),
+        "agent T\n  test \"t\"\n    expect text.uper(\"a\") == \"A\"\n",
+    )
+    .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_lugh"))
+        .args(["typo.lugh", "--test"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
     assert_eq!(out.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&out.stderr).contains("unknown function 'text.uper'"));
 }
 
 fn get(port: u16, path: &str, auth: Option<&str>) -> (u16, String) {
     let mut s = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    let header = auth.map(|t| format!("Authorization: Bearer {t}\r\n")).unwrap_or_default();
+    let header = auth
+        .map(|t| format!("Authorization: Bearer {t}\r\n"))
+        .unwrap_or_default();
     write!(s, "GET {path} HTTP/1.1\r\nHost: x\r\n{header}\r\n").unwrap();
     let mut raw = String::new();
     s.read_to_string(&mut raw).unwrap();
-    (raw[9..12].parse().unwrap(), raw.split_once("\r\n\r\n").map(|x| x.1.to_string()).unwrap_or_default())
+    (
+        raw[9..12].parse().unwrap(),
+        raw.split_once("\r\n\r\n")
+            .map(|x| x.1.to_string())
+            .unwrap_or_default(),
+    )
 }
 
 #[test]
@@ -231,7 +254,12 @@ fn auth_token_and_scheduled_jobs() {
     let port = 20_000 + (std::process::id() % 2000) as u16;
 
     // Without the variable, the server must refuse to start.
-    let out = Command::new(env!("CARGO_BIN_EXE_lugh")).args(["app.lugh", "--serve", &port.to_string()]).current_dir(&dir).env_remove("TEST_LUGH_TOKEN").output().unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_lugh"))
+        .args(["app.lugh", "--serve", &port.to_string()])
+        .current_dir(&dir)
+        .env_remove("TEST_LUGH_TOKEN")
+        .output()
+        .unwrap();
     assert!(!out.status.success());
 
     let token = "abcdef0123456789abcdef";
@@ -256,5 +284,103 @@ fn auth_token_and_scheduled_jobs() {
     let _ = server.wait();
     assert_eq!(code, 200);
     let ticks: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert!(ticks["ticks"].as_f64().unwrap_or(0.0) >= 2.0, "scheduler ticks: {body}");
+    assert!(
+        ticks["ticks"].as_f64().unwrap_or(0.0) >= 2.0,
+        "scheduler ticks: {body}"
+    );
+}
+
+fn notes_reset() {
+    let _ = std::fs::remove_file(repo().join("examples/data/notes.json"));
+}
+
+#[test]
+fn mcp_effects_follow_tool_annotations() {
+    let _one = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    clean();
+    notes_reset();
+    let out = Command::new(env!("CARGO_BIN_EXE_lugh"))
+        .args(["examples/notes_agent.lugh", "--yes"])
+        .env("LUGH_MCP_CONFIG", "examples/lugh.mcp.json")
+        .current_dir(repo())
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("Server offers: list_notes, add_note, delete_note"), "{text}");
+    assert!(text.contains("[submit] mcp.call notes add_note"), "add_note must need approval: {text}");
+    assert!(!text.contains("[read] mcp.call notes list_notes"), "list_notes is read-only and allowed");
+    assert!(text.contains("policy denies 'delete'"), "{text}");
+    // The delete was stopped before reaching the server: both notes remain.
+    let notes = std::fs::read_to_string(repo().join("examples/data/notes.json")).unwrap();
+    assert!(notes.contains("Biometrics") && notes.contains("Insurance"), "{notes}");
+    notes_reset();
+}
+
+#[test]
+fn plan_repairs_its_program_then_runs_safely() {
+    let _one = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    clean();
+    notes_reset();
+    let port = 22_000 + (std::process::id() % 2000) as u16;
+    let log = std::env::temp_dir().join(format!("lugh-plan-{}.jsonl", std::process::id()));
+    let _ = std::fs::remove_file(&log);
+    let mut mock = Command::new("python3")
+        .args(["core/tests/fixtures/mock_llm.py", &port.to_string()])
+        .env("REQUEST_LOG", &log)
+        .current_dir(repo())
+        .spawn()
+        .expect("python3 for the mock model");
+    for _ in 0..50 {
+        if TcpStream::connect(("127.0.0.1", port)).is_ok() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let plan_file = std::env::temp_dir().join(format!("lugh-plan-{}.lugh", std::process::id()));
+    let out = Command::new(env!("CARGO_BIN_EXE_lugh"))
+        .args(["plan", "Add a passport photos reminder", "--use", "mcp", "--out"])
+        .arg(&plan_file)
+        .args(["--run", "--yes"])
+        .env("ANTHROPIC_API_KEY", "test")
+        .env("LUGH_LLM_URL", format!("http://127.0.0.1:{port}/v1/messages"))
+        .env("LUGH_MCP_CONFIG", "examples/lugh.mcp.json")
+        .current_dir(repo())
+        .output()
+        .unwrap();
+    mock.kill().ok();
+    let _ = mock.wait();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{text}\n{}", String::from_utf8_lossy(&out.stderr));
+    assert!(text.contains("unknown function 'text.summarize'"), "first attempt should fail: {text}");
+    assert!(text.contains("repaired its program after 1"), "{text}");
+    assert!(text.contains("Plan safety"), "{text}");
+    assert!(text.contains("You have [\"Photos\"]"), "{text}");
+    let requests = std::fs::read_to_string(&log).unwrap();
+    assert_eq!(requests.lines().count(), 2);
+    assert!(requests.contains("add_note [submit]"), "the model must be told the real MCP tools");
+    assert!(requests.contains("does not compile"), "the compile error must be sent back");
+    notes_reset();
+}
+
+#[test]
+fn plan_safe_overrides_a_permissive_policy() {
+    let _one = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    clean();
+    notes_reset();
+    let prog = std::env::temp_dir().join(format!("lugh-permissive-{}.lugh", std::process::id()));
+    std::fs::write(
+        &prog,
+        "agent Greedy\n  use mcp\n  policy\n    allow read, write, submit, delete\n  goal \"wipe\"\n    mcp.call \"notes\" \"delete_note\" {title: \"x\"}\n",
+    )
+    .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_lugh"))
+        .arg(&prog)
+        .args(["--plan-safe", "--yes"])
+        .env("LUGH_MCP_CONFIG", "examples/lugh.mcp.json")
+        .current_dir(repo())
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("policy denies 'delete'"), "plan safety must deny delete whatever the program says: {text}");
+    notes_reset();
 }

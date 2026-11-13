@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "notes": {
+      "command": "python3",
+      "args": ["core/tests/fixtures/notes_server.py"],
+      "env": { "NOTES_FILE": "examples/data/notes.json" }
+    }
+  }
+}
