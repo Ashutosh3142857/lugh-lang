@@ -41,11 +41,17 @@ Agent frameworks keep the things that matter most — permissions, spending limi
 
 ## Quick start
 
-Requires Python 3.9+. No dependencies for the core.
+Python runtime: Python 3.9+, no dependencies. Native runtime: Rust 1.70+ to build.
 
 ```bash
 git clone https://github.com/Ashutosh3142857/lugh-lang.git
 cd lugh-lang
+
+# Native runtime (Rust)
+(cd core && cargo build --release)
+./core/target/release/lugh examples/research_desk.lugh --yes --eval
+
+# Reference runtime (Python)
 
 python lugh.py examples/flight_scout.lugh --check   # list every action and its policy
 python lugh.py examples/flight_scout.lugh           # run, approving actions as you go
@@ -85,6 +91,30 @@ Run the full demo:
 python lugh.py examples/research_desk.lugh --yes --eval
 ```
 
+## Two runtimes
+
+| | Python reference (`lugh.py`) | Lugh Core (`core/`, Rust) |
+| --- | --- | --- |
+| Use it for | Prototyping, the browser adapter | Production, scale, embedding |
+| Install | Python 3.9+ | One 2.4 MB binary, libc only |
+| Adapters | http, fs, shell, browser, llm | http, fs, shell, llm |
+
+Both runtimes produce identical results on the bundled examples.
+
+### Benchmarks
+
+Measured with `python bench/gen.py && python bench/run.py` (Linux x86-64, mean of
+repeated runs; peak memory of the measured process alone):
+
+| Workload | Python | Lugh Core | Speed-up | Memory |
+| --- | --- | --- | --- | --- |
+| Startup (`bench/hello.lugh`) | 80 ms, 22.3 MB | 2.9 ms, 4.3 MB | 27.7× | 5.2× less |
+| 1,000,000 relational comparisons + attention over 3,000 emails (`bench/heavy.lugh`) | 2,079 ms, 26.2 MB | 271 ms, 13.7 MB | 7.7× | 1.9× less |
+
+Numbers vary by machine. An agent's wall-clock time is usually dominated by
+network and model latency; Core's advantage is cheap startup, a small footprint
+and real parallelism when many agents run at once.
+
 ## Effects and policy
 
 Every action belongs to one of seven effect types. Policy is written against these, so reviewing an agent means understanding seven words rather than every API it calls.
@@ -119,14 +149,17 @@ An adapter is one class: a map of `verb → effect` and a `call(verb, args)` met
 
 - [Language specification](docs/SPEC.md)
 - [From research to runtime](docs/RESEARCH.md): how 30 foundational papers map to Lugh
+- [Lugh Core](core/README.md): the native Rust runtime
 
 ## Roadmap
 
 1. **Learn (v0.2)** ✓ — research-derived primitives, adaptive routing, evaluation
-2. **Connect (v0.3)** — MCP client, editor syntax support, multi-agent message passing
-3. **Reach (v0.5)** — desktop app adapter, screen fallback, spend metering
-4. **Trust (v1.0)** — signed audit logs, shareable policy packs, automatic fallback ladder
-5. **Platform** — hosted runtime, adapter marketplace, team approvals
+2. **Native (v0.3)** ✓ — Lugh Core: Rust runtime, compile-once execution, benchmarks
+3. **Compile (v0.4)** — bytecode VM, field access compiled to fixed slots, WebAssembly build
+4. **Connect (v0.5)** — MCP client in Core, editor syntax support, multi-agent message passing
+5. **Reach (v0.6)** — desktop app adapter, screen fallback, spend metering
+6. **Trust (v1.0)** — signed audit logs, shareable policy packs, automatic fallback ladder
+7. **Platform** — hosted runtime, adapter marketplace, team approvals
 
 ## License
 
