@@ -91,6 +91,33 @@ Run the full demo:
 python lugh.py examples/research_desk.lugh --yes --eval
 ```
 
+## Agents that write their own programs
+
+```bash
+lugh plan "Add a passport photos reminder and list my visa notes" --use mcp --run
+```
+
+An LLM writes the Lugh program, the compiler checks it (sending any error back
+for the model to fix), and you see the program and a report of everything it
+can touch before it runs. Generated programs run under **plan safety**: only
+reads happen without asking you, and deletes are always blocked.
+
+Lugh connects to any [MCP](https://modelcontextprotocol.io) server (GitHub,
+Slack, Drive, Notion and thousands more) with the same config format as
+Claude Desktop. Each tool's effect comes from its MCP annotations, and policy
+decides before the call is sent. See [MCP and plan](docs/MCP.md).
+
+```lugh
+use mcp
+policy
+  allow read
+  ask human before submit
+  deny delete
+...
+mcp.call "notes" "add_note" {title: "Biometrics"}   # asks you first
+mcp.call "notes" "delete_note" {title: "x"}         # blocked by policy, never sent
+```
+
 ## Standard library
 
 Lugh Core ships with what most projects pull in from the Python and JavaScript
@@ -153,9 +180,9 @@ styles and script) with no build step.
 | --- | --- | --- |
 | Use it for | Prototyping, the browser adapter | Production, scale, embedding |
 | Install | Python 3.9+ | One 5.9 MB binary (SQLite included), libc only |
-| Adapters | http, fs, shell, browser, llm | http, fs, shell, llm |
+| Adapters | http, fs, shell, browser, llm | http, fs, shell, db, mcp, llm |
 | Web (routes, pages, inbox, auth, jobs) | — | Yes |
-| Standard library, `test` blocks | Core language only | Yes |
+| Standard library, `test` blocks, `lugh plan` | Core language only | Yes |
 
 Both runtimes produce identical results on the bundled examples.
 
@@ -207,6 +234,7 @@ An adapter is one class: a map of `verb → effect` and a `call(verb, args)` met
 
 - [Language specification](docs/SPEC.md)
 - [From research to runtime](docs/RESEARCH.md): how 30 foundational papers map to Lugh
+- [MCP and `lugh plan`](docs/MCP.md): connecting to MCP servers; letting a model write programs you approve
 - [Standard library](docs/STDLIB.md): every module, mapped to its Python and JavaScript equivalents
 - [Lugh Core](core/README.md): the native Rust runtime
 
@@ -216,11 +244,12 @@ An adapter is one class: a map of `verb → effect` and a `call(verb, args)` met
 2. **Native (v0.3)** ✓ — Lugh Core: Rust runtime, compile-once execution, benchmarks
 3. **Full stack (v0.4)** ✓ — routes, pages, approvals inbox, end-to-end tests
 4. **Standard library (v0.5)** ✓ — 100+ functions, SQLite, tests, jobs, auth, object literals
-5. **Compile (v0.6)** — bytecode VM, field access compiled to fixed slots, WebAssembly build
-6. **Connect (v0.7)** — MCP client in Core, editor syntax support, multi-agent message passing
-7. **Reach (v0.8)** — desktop app adapter, screen fallback, spend metering
-8. **Trust (v1.0)** — TLS, user accounts and roles for served apps, signed audit logs, shareable policy packs, automatic fallback ladder
-9. **Platform** — hosted runtime, adapter marketplace, team approvals
+5. **Connect (v0.6)** ✓ — MCP client, `lugh plan` with self-repair and plan safety
+6. **Compile (v0.7)** — bytecode VM, field access compiled to fixed slots, WebAssembly build
+7. **Reach (v0.8)** — editor support, browser playground (WebAssembly), package manager, multi-agent message passing
+8. **Desktop (v0.9)** — desktop app adapter, screen fallback, spend metering
+9. **Trust (v1.0)** — TLS, user accounts and roles for served apps, signed audit logs, shareable policy packs, automatic fallback ladder
+10. **Platform** — hosted runtime, adapter marketplace, team approvals
 
 ## License
 
