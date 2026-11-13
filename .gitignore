@@ -23,3 +23,5 @@ lugh.db
 .env
 examples/data/notes.json
 plan.lugh
+playground/lugh.wasm
+editors/vscode/*.vsix

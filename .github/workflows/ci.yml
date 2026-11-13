@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (Rust, Lugh, Python, VS Code extension)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - name: Rust tests
+        working-directory: core
+        run: cargo test --release
+      - name: Clippy
+        working-directory: core
+        run: cargo clippy --release --all-targets -- -D warnings
+      - name: Lugh standard-library suite
+        run: ./core/target/release/lugh examples/stdlib_test.lugh --test
+      - name: Python reference runtime
+        run: |
+          python3 lugh.py examples/flight_scout.lugh --yes
+          python3 lugh.py examples/research_desk.lugh --yes --eval
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: VS Code extension tests
+        working-directory: editors/vscode
+        run: |
+          node test/grammar.test.js
+          LUGH="$GITHUB_WORKSPACE/core/target/release/lugh" node test/extension.test.js
+
+  wasm:
+    name: WebAssembly build (browser playground)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - name: Build lugh.wasm
+        working-directory: core
+        run: cargo rustc --release --lib --no-default-features --target wasm32-unknown-unknown --crate-type cdylib
+      - name: Assemble the playground
+        run: cp core/target/wasm32-unknown-unknown/release/lugh_core.wasm playground/lugh.wasm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Smoke-test lugh.wasm
+        run: node playground/test-wasm.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playground
+          path: |
+            playground/index.html
+            playground/lugh.wasm
+
+  vscode:
+    name: Package VS Code extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Package
+        working-directory: editors/vscode
+        run: npx --yes @vscode/vsce@3 package --no-dependencies
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vscode-extension
+          path: editors/vscode/*.vsix
+
+  pages:
+    name: Publish playground to GitHub Pages
+    needs: [test, wasm]
+    if: github.ref == 'refs/heads/main' && github.event.repository.private == false
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: playground
+          path: site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
