@@ -22,7 +22,7 @@ through the inbox, token auth and scheduled jobs; MCP effects and policy against
 | --- | --- |
 | `parser.rs` | Source → indentation tree → statement and expression trees, **once**, before anything runs. Variable paths such as `fare.price` are split at compile time. |
 | `runtime.rs` | Executes the trees. Every effect passes the policy gate and budget meter; memory, learned route statistics and the audit log are thread-safe. `together`, `consensus` and `each … parallel N` run on real OS threads. |
-| `adapters.rs` | `http`, `fs`, `shell`, `db` (bundled SQLite, bound parameters), `mcp` and the `think` LLM call. Respects `HTTPS_PROXY` and `NO_PROXY`; loopback never goes through a proxy. |
+| `adapters.rs` | `http`, `fs`, `shell`, `db` (bundled SQLite, bound parameters), `mcp` and the `think` LLM call. Respects `HTTPS_PROXY` and `NO_PROXY`; loopback never goes through a proxy. TLS trusts the operating system's certificate store, so it works behind corporate proxies that inspect traffic. |
 | `mcp.rs` | MCP client over stdio (JSON-RPC 2.0): initialization, paginated tool listing, calls, effects from tool annotations. |
 | `plan.rs` | `lugh plan`: prompt construction with the real adapter and MCP tool lists, compile-and-repair loop. |
 | `web.rs` | Backend and frontend frameworks: a small HTTP/1.1 server on `std::net` (thread per connection), route matching with `:params`, the server-side page renderer with a ~3 KB script, and the approvals inbox. No web dependencies. |

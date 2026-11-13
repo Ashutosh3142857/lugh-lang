@@ -95,6 +95,11 @@ in a `.lugh` program or a commit.
 
 ## Tested against
 
+- A real Claude model: given *"Add a reminder to book passport photos, then
+  list everything on my visa checklist"*, it wrote a program that compiled on
+  the first attempt, asked before adding the note, added it through MCP, and
+  listed only the visa items. It deleted nothing.
+
 - A protocol-level test server written directly from the MCP specification
   with no SDK ([`core/tests/fixtures/notes_server.py`](../core/tests/fixtures/notes_server.py)),
   covering initialization, tool listing, calls, tool errors and annotations.

@@ -74,7 +74,7 @@ at the top level (see [STDLIB](STDLIB.md) and the Web section below).
 | Simplicity | `simplest of list` (shortest compressed description) |
 | Novelty | `novelty x [against list]` (0 = already known, ~1 = new) |
 
-Strings interpolate `{name.field}`.
+Strings interpolate like f-strings and template literals: `{name.field}` or any pure expression, such as `{count(items)}` or `{round(total / n, 2)}`. Adapter calls are not allowed inside braces, so a message can never cause an effect; text that isn't a valid expression is left as written.
 
 ## Effects
 
