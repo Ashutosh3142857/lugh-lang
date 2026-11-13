@@ -9,7 +9,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufRead, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::Instant;
 
 /// FxHash: a fast, non-cryptographic hasher. Variable names are program-controlled,
 /// so hash-flooding resistance is unnecessary here.
@@ -130,10 +130,13 @@ fn fail<T>(m: impl Into<String>) -> R<T> {
 }
 
 fn now() -> f64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs_f64())
-        .unwrap_or(0.0)
+    crate::clock::now()
+}
+
+/// Where audit records go: a file (CLI and server) or memory (playground).
+pub enum Sink {
+    File(File),
+    Memory(Vec<String>),
 }
 
 pub struct Runtime {
@@ -147,10 +150,15 @@ pub struct Runtime {
     pub call_budget: usize,
     pub quiet: bool,
     calls: AtomicUsize,
-    started: Instant,
+    steps: AtomicUsize,
+    started: f64,
     memory: Arc<Mutex<Map<String, Value>>>,
     stats: Arc<Mutex<Map<String, Value>>>,
-    audit: Arc<Mutex<File>>,
+    audit: Arc<Mutex<Sink>>,
+    /// Playground: printed lines are collected here instead of going to stdout.
+    pub output: Option<Arc<Mutex<String>>>,
+    /// Playground: no files, no persistence; approvals are auto-granted and shown.
+    pub ephemeral: bool,
     human: Arc<Mutex<()>>,
     /// Set in server mode: approvals go to the web inbox instead of the terminal.
     pub inbox: Option<Arc<Approvals>>,
@@ -194,18 +202,66 @@ impl Runtime {
             call_budget: 25,
             quiet: false,
             calls: AtomicUsize::new(0),
-            started: Instant::now(),
+            steps: AtomicUsize::new(0),
+            started: now(),
             memory: Arc::new(Mutex::new(memory)),
             stats: Arc::new(Mutex::new(load(STATS))),
-            audit: Arc::new(Mutex::new(
+            audit: Arc::new(Mutex::new(Sink::File(
                 OpenOptions::new()
                     .create(true)
                     .append(true)
                     .open("lugh_audit.jsonl")?,
-            )),
+            ))),
             human: Arc::new(Mutex::new(())),
             inbox: None,
+            output: None,
+            ephemeral: false,
         })
+    }
+
+    /// A sandboxed runtime for the playground: nothing touches the disk, output is
+    /// captured, and approvals are granted automatically but shown in the output.
+    pub fn ephemeral() -> Self {
+        Runtime {
+            auto_yes: true,
+            agent: "anonymous".into(),
+            adapters: vec![],
+            allow: HashSet::new(),
+            ask: HashSet::new(),
+            deny: HashSet::new(),
+            time_budget: 10.0,
+            call_budget: 25,
+            quiet: false,
+            calls: AtomicUsize::new(0),
+            steps: AtomicUsize::new(0),
+            started: now(),
+            memory: Arc::new(Mutex::new(Map::new())),
+            stats: Arc::new(Mutex::new(Map::new())),
+            audit: Arc::new(Mutex::new(Sink::Memory(Vec::new()))),
+            human: Arc::new(Mutex::new(())),
+            inbox: None,
+            output: Some(Arc::new(Mutex::new(String::new()))),
+            ephemeral: true,
+        }
+    }
+
+    /// Print a line, or capture it in playground mode.
+    pub fn emit(&self, line: &str) {
+        match &self.output {
+            Some(buf) => {
+                let mut b = buf.lock().unwrap();
+                b.push_str(line);
+                b.push('\n');
+            }
+            None => println!("{line}"),
+        }
+    }
+
+    pub fn take_output(&self) -> String {
+        self.output
+            .as_ref()
+            .map(|b| std::mem::take(&mut *b.lock().unwrap()))
+            .unwrap_or_default()
     }
 
     /// A per-request runtime: same policy, memory, stats, audit and inbox; fresh budget.
@@ -221,20 +277,26 @@ impl Runtime {
             call_budget: self.call_budget,
             quiet: self.quiet,
             calls: AtomicUsize::new(0),
-            started: Instant::now(),
+            steps: AtomicUsize::new(0),
+            started: now(),
             memory: self.memory.clone(),
             stats: self.stats.clone(),
             audit: self.audit.clone(),
             human: self.human.clone(),
             inbox: self.inbox.clone(),
+            output: self.output.clone(),
+            ephemeral: self.ephemeral,
         }
     }
 
     pub fn start_clock(&mut self) {
-        self.started = Instant::now();
+        self.started = now();
     }
 
     pub fn save(&self) {
+        if self.ephemeral {
+            return;
+        }
         let _ = std::fs::write(
             MEMORY,
             serde_json::to_string_pretty(&*self.memory.lock().unwrap()).unwrap_or_default(),
@@ -253,19 +315,41 @@ impl Runtime {
         if let Value::Object(f) = fields {
             rec.extend(f);
         }
-        let _ = writeln!(self.audit.lock().unwrap(), "{}", Value::Object(rec));
+        match &mut *self.audit.lock().unwrap() {
+            Sink::File(f) => {
+                let _ = writeln!(f, "{}", Value::Object(rec));
+            }
+            Sink::Memory(v) => v.push(Value::Object(rec).to_string()),
+        }
     }
 
     pub fn say(&self, icon: &str, msg: &str) {
         if !self.quiet {
-            println!("  {icon} {msg}");
+            self.emit(&format!("  {icon} {msg}"));
         }
+    }
+
+    /// Called inside long loops: enforces the time budget even when a program
+    /// does pure computation with no effects (checked every 4,096 steps).
+    fn tick(&self) -> R<()> {
+        if self
+            .steps
+            .fetch_add(1, Ordering::Relaxed)
+            .is_multiple_of(4096)
+            && now() - self.started > self.time_budget
+        {
+            return Err(Flow::Budget(format!(
+                "time budget of {:.0}s used up",
+                self.time_budget
+            )));
+        }
+        Ok(())
     }
 
     // ───────── policy gate: every effect passes here ─────────
 
     fn gate(&self, effect: &str, desc: &str) -> R<()> {
-        if self.started.elapsed().as_secs_f64() > self.time_budget {
+        if now() - self.started > self.time_budget {
             return Err(Flow::Budget(format!(
                 "time budget of {:.0}s used up",
                 self.time_budget
@@ -306,7 +390,12 @@ impl Runtime {
         }
         let _one_at_a_time = self.human.lock().unwrap();
         if self.auto_yes {
-            self.say("👤", &format!("auto-approved → {q}"));
+            let how = if self.ephemeral {
+                "would ask you (approved in the playground)"
+            } else {
+                "auto-approved"
+            };
+            self.say("👤", &format!("{how} → {q}"));
             self.audit(
                 "human",
                 serde_json::json!({"question": q, "answer": "yes(auto)"}),
@@ -531,7 +620,7 @@ impl Runtime {
                     other => return fail(format!("each needs a list, got {}", txt(&other))),
                 };
                 match parallel {
-                    Some(n) if *n > 1 && items.len() > 1 => {
+                    Some(n) if *n > 1 && items.len() > 1 && cfg!(feature = "native") => {
                         let n = (*n).min(items.len());
                         let results: Vec<R<(usize, Value)>> = std::thread::scope(|sc| {
                             let handles: Vec<_> = (0..n)
@@ -570,6 +659,7 @@ impl Runtime {
                     _ => {
                         let mut out = Vec::with_capacity(items.len());
                         for it in items {
+                            self.tick()?;
                             env.insert(var.clone(), it);
                             out.push(self.run_block(body, env)?);
                         }
@@ -592,11 +682,11 @@ impl Runtime {
                     ),
                 )?;
                 match channel.as_str() {
-                    "console" => println!("  📣 [{target}] {msg}"),
+                    "console" => self.emit(&format!("  📣 [{target}] {msg}")),
                     "file" => {
                         adapters::call("fs", "append", &[Value::String(target.clone()), Value::String(msg.clone())]).map_err(Flow::Fail)?;
                     }
-                    _ => println!("  📣 [{channel}:{target}] {msg}   (simulated — connect an MCP server for real delivery)"),
+                    _ => self.emit(&format!("  📣 [{channel}:{target}] {msg}   (simulated — connect an MCP server for real delivery)")),
                 }
                 self.audit(
                     "sent",
@@ -630,6 +720,14 @@ impl Runtime {
     }
 
     fn together(&self, branches: &[Block], env: &Env) -> R<Value> {
+        if !cfg!(feature = "native") {
+            // No OS threads (browser): run the branches one after another.
+            let mut out = Vec::with_capacity(branches.len());
+            for b in branches {
+                out.push(self.run_block(b, &mut env.clone())?);
+            }
+            return Ok(Value::Array(out));
+        }
         let results: Vec<R<Value>> = std::thread::scope(|sc| {
             let hs: Vec<_> = branches
                 .iter()
@@ -685,16 +783,16 @@ impl Runtime {
         );
         let mut last = String::new();
         for (key, block) in order {
-            let t0 = Instant::now();
+            let t0 = now();
             let mut scoped = env.clone();
             match self.run_block(block, &mut scoped) {
                 Ok(v) => {
-                    self.route_update(key, true, t0.elapsed().as_secs_f64());
+                    self.route_update(key, true, now() - t0);
                     self.say("✔", &format!("route succeeded: {}", first_word(key)));
                     return Ok(v);
                 }
                 Err(Flow::Fail(m)) => {
-                    self.route_update(key, false, t0.elapsed().as_secs_f64());
+                    self.route_update(key, false, now() - t0);
                     self.audit(
                         "route_failed",
                         serde_json::json!({"route": key, "error": m}),
@@ -926,6 +1024,7 @@ impl Runtime {
                 local.insert(var.clone(), Value::Null);
                 let mut out = Vec::with_capacity(items.len());
                 for item in items {
+                    self.tick()?;
                     *local.get_mut(var).unwrap() = item;
                     let v = self.eval(cond, &local)?;
                     if keep {
@@ -975,6 +1074,7 @@ impl Runtime {
                 for x in xs.iter_mut() {
                     *local.get_mut(a).unwrap() = std::mem::take(x);
                     for y in ys.iter_mut() {
+                        self.tick()?;
                         // Move the item into the binding slot and back: no allocation per pair.
                         *local.get_mut(b).unwrap() = std::mem::take(y);
                         let hit = truthy(&self.eval(cond, &local)?);
@@ -1012,16 +1112,16 @@ impl Runtime {
                         vals.first().map(txt).unwrap_or_default(),
                         vals.get(1).map(txt).unwrap_or_default(),
                     );
-                    crate::mcp::tool_effect(&server, &tool).map_err(Flow::Fail)?
+                    Self::mcp_effect(&server, &tool)?
                 } else {
                     effect
                 };
                 self.gate(effect, &desc)?;
                 self.say("→", &desc);
-                let t0 = Instant::now();
+                let t0 = now();
                 match adapters::call(adapter, method, &vals) {
                     Ok(v) => {
-                        self.audit("effect", serde_json::json!({"effect": effect, "action": desc, "ms": t0.elapsed().as_millis() as u64}));
+                        self.audit("effect", serde_json::json!({"effect": effect, "action": desc, "ms": ((now() - t0) * 1000.0) as u64}));
                         adapters::cast(v, cast.as_deref()).map_err(Flow::Fail)?
                     }
                     Err(err) => {
@@ -1034,6 +1134,16 @@ impl Runtime {
                 }
             }
         })
+    }
+
+    #[cfg(feature = "native")]
+    fn mcp_effect(server: &str, tool: &str) -> R<&'static str> {
+        crate::mcp::tool_effect(server, tool).map_err(Flow::Fail)
+    }
+
+    #[cfg(not(feature = "native"))]
+    fn mcp_effect(_server: &str, _tool: &str) -> R<&'static str> {
+        fail("mcp is not available in this build")
     }
 
     /// Borrow a variable path without cloning (fast path for comparisons).
@@ -1114,11 +1224,15 @@ impl Runtime {
                 continue;
             };
             let inner = &after[..close];
-            let simple = inner.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '.');
+            let simple = inner
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == '.');
             let value = if simple {
                 self.lookup(inner, env).ok()
             } else {
-                crate::parser::parse_expr(inner, &[]).ok().and_then(|e| self.eval(&e, env).ok())
+                crate::parser::parse_expr(inner, &[])
+                    .ok()
+                    .and_then(|e| self.eval(&e, env).ok())
             };
             match value {
                 Some(v) => out.push_str(&txt(&v)),

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lugh Playground</title>
+<meta name="description" content="Try Lugh, the programming language for AI agents, in your browser.">
+<style>
+:root{--bg:#f6f5f1;--panel:#fff;--ink:#1c1c1a;--muted:#6b6a64;--line:#e3e1da;--accent:#2f5d50;--ok:#2f7a4a;--bad:#a33a2c;--code:#fbfaf7}
+@media (prefers-color-scheme:dark){:root{--bg:#121211;--panel:#1b1b19;--ink:#ecebe6;--muted:#9a9993;--line:#2c2c29;--accent:#7fb8a6;--ok:#6cc08b;--bad:#e0806f;--code:#161614}}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+header h1{font-size:16px;margin:0}header .tag{color:var(--muted)}
+.spacer{flex:1}
+select,button{font:inherit;border-radius:6px;padding:6px 12px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+button{cursor:pointer}button.primary{background:var(--accent);border-color:var(--accent);color:var(--panel);font-weight:600}
+button:disabled{opacity:.5;cursor:default}
+#engine{font-size:12px;color:var(--muted)}
+main{flex:1;display:grid;grid-template-columns:1fr 1fr;min-height:0}
+@media (max-width:800px){main{grid-template-columns:1fr;grid-template-rows:1fr 1fr}}
+section{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
+section h2{font-size:12px;font-weight:600;color:var(--muted);margin:0;padding:8px 16px;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.04em}
+textarea,pre{flex:1;margin:0;padding:16px;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--code);color:var(--ink);border:0;resize:none;outline:none;overflow:auto;tab-size:2;white-space:pre}
+pre{white-space:pre-wrap}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.dim{color:var(--muted)}
+footer{padding:8px 20px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);background:var(--panel)}
+footer a{color:inherit}
+kbd{font:11px ui-monospace,monospace;border:1px solid var(--line);border-radius:4px;padding:1px 4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Lugh Playground</h1>
+  <span class="tag">a programming language for AI agents</span>
+  <span class="spacer"></span>
+  <select id="example" aria-label="Example program"></select>
+  <button id="check" title="Compile only">Check</button>
+  <button id="test" title="Run test blocks">Test</button>
+  <button id="run" class="primary" title="Run goals (Ctrl+Enter)">Run</button>
+</header>
+<main>
+  <section><h2>Program</h2><textarea id="code" spellcheck="false" aria-label="Lugh program"></textarea></section>
+  <section><h2>Output <span id="engine"></span></h2><pre id="out" aria-live="polite"></pre></section>
+</main>
+<footer>
+  Adapters that touch files, networks and services are disabled here; <a href="https://github.com/Ashutosh3142857/lugh-lang">install Lugh</a> to use them.
+  <kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs.
+</footer>
+<script>
+const EXAMPLES = {
+"Collections and policy": `agent FareFinder
+  goal "Find the best fare under budget"
+    let fares = [
+      {airline: "Emirates", price: 48200, stops: 1},
+      {airline: "Etihad", price: 41800, stops: 1},
+      {airline: "Qatar Airways", price: 43950, stops: 1},
+      {airline: "IndiGo", price: 39900, stops: 2}
+    ]
+    let direct_enough = filter f in fares where f.stops <= 1
+    let best = first(sort direct_enough by price)
+    ensure best.price < 45000 else stop "Nothing under budget"
+    log "Best: {best.airline} at INR {best.price}"
+    log "Average fare: {round(avg(map f in fares to f.price), 0)}"
+    ask human "Book {best.airline}?" -> ok
+    when ok
+      log "Booked (in a real run this waits for your approval)"
+`,
+"Statistics and dates": `agent Analyst
+  goal "Summarise a month of sales"
+    let sales = [1200, 950, 1430, 2100, 870, 1990, 1600]
+    log "Mean {round(stats.mean(sales), 1)}, median {stats.median(sales)}"
+    log "Std dev {round(stats.stdev(sales), 1)}, 90th percentile {stats.percentile(sales, 90)}"
+    let start = "2026-11-14"
+    log "Report due {time.add(start, 10, \\"days\\")}, a {time.weekday(time.add(start, 10, \\"days\\"))}"
+    let week = time.start_of(start, "week")
+    log "Week began {week}"
+`,
+"Validation and templates": `agent Intake
+  goal "Validate a signup and render a welcome"
+    let spec = {name: "text 2..40", email: "email", age: "int 18..120"}
+    let good = {name: "Ash", email: "ash@example.com", age: 33}
+    let bad = {name: "A", email: "nope", age: 12}
+    log "good: {schema.valid(good, spec)}"
+    each problem in schema.check(bad, spec)
+      log "bad: {problem}"
+    log template.render("Welcome, {{name}}! We'll write to {{email}}.", good)
+    log "id {uuid()}"
+`,
+"Tests": `agent Checks
+  test "maths"
+    expect sum([1, 2, 3]) == 6
+    expect round(math.sqrt(2), 3) == 1.414
+  test "text"
+    expect upper("lugh") == "LUGH"
+    expect text.find("INV-2041 due", "INV-([0-9]+)") == "2041"
+  test "this one fails on purpose"
+    expect 1 + 1 == 3
+`,
+"Grounded extraction": `agent Inbox
+  goal "Find the urgent email and pull out its deadline"
+    let inbox = [
+      {subject: "Lunch on Friday?", body: "Fancy tacos?"},
+      {subject: "Invoice INV-2041 overdue", body: "Invoice INV-2041 is overdue. Payment is due by 30 November 2026. Please confirm."},
+      {subject: "Standup moved", body: "Now at 10:30."}
+    ]
+    let urgent = first(attend to inbox by "overdue invoice payment" top 1)
+    log "Most relevant: {urgent.subject}"
+    let deadline = point to "payment due by date" in urgent.body
+    log "Deadline, quoted from the source: {deadline}"
+`
+};
+const $ = id => document.getElementById(id);
+const code = $("code"), out = $("out"), engine = $("engine");
+for (const name of Object.keys(EXAMPLES)) $("example").add(new Option(name, name));
+const fromHash = decodeURIComponent(location.hash.slice(1));
+code.value = fromHash && fromHash.startsWith("agent ") ? fromHash : EXAMPLES[Object.keys(EXAMPLES)[0]];
+$("example").onchange = e => { code.value = EXAMPLES[e.target.value]; out.textContent = ""; };
+
+let wasm = null;
+async function loadWasm() {
+  try {
+    const res = await fetch("lugh.wasm");
+    if (!res.ok) throw new Error(res.status);
+    const { instance } = await WebAssembly.instantiate(await res.arrayBuffer(), { env: { lugh_now_ms: () => Date.now() } });
+    wasm = instance.exports;
+    engine.textContent = "· running in your browser";
+  } catch {
+    engine.textContent = "· running on the server";
+  }
+}
+function runWasm(src, mode) {
+  const bytes = new TextEncoder().encode(src);
+  const ptr = wasm.lugh_alloc(bytes.length);
+  new Uint8Array(wasm.memory.buffer, ptr, bytes.length).set(bytes);
+  const n = wasm.lugh_run(ptr, bytes.length, { run: 0, test: 1, check: 2 }[mode]);
+  wasm.lugh_free(ptr, bytes.length);
+  return new TextDecoder().decode(new Uint8Array(wasm.memory.buffer, wasm.lugh_output_ptr(), n).slice());
+}
+async function runServer(src, mode) {
+  const res = await fetch("api/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: src, mode }) });
+  if (!res.ok) return "❌ The playground server is not available (" + res.status + ").";
+  return (await res.json()).output;
+}
+function paint(text) {
+  out.innerHTML = "";
+  for (const line of text.split("\n")) {
+    const div = document.createElement("div");
+    div.textContent = line || " ";
+    if (/^\s*(✅|✓|✔)/.test(line) || /\b0 failed\b/.test(line)) div.className = "ok";
+    else if (/^\s*(❌|✗|⏹)/.test(line) || /^\s{4,}\S/.test(line) && /expected|denied|budget/.test(line)) div.className = "bad";
+    else if (/^\s*👤/.test(line)) div.className = "dim";
+    out.appendChild(div);
+  }
+}
+async function go(mode) {
+  for (const b of ["run", "test", "check"]) $(b).disabled = true;
+  out.textContent = "…";
+  const started = performance.now();
+  try {
+    const text = wasm ? runWasm(code.value, mode) : await runServer(code.value, mode);
+    paint(text + `\n(${Math.round(performance.now() - started)} ms)`);
+  } catch (e) {
+    paint("❌ " + e);
+  } finally {
+    for (const b of ["run", "test", "check"]) $(b).disabled = false;
+  }
+}
+$("run").onclick = () => go("run");
+$("test").onclick = () => go("test");
+$("check").onclick = () => go("check");
+code.addEventListener("keydown", e => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); go("run"); }
+  if (e.key === "Tab") { e.preventDefault(); const s = code.selectionStart; code.setRangeText("  ", s, code.selectionEnd, "end"); }
+});
+loadWasm();
+</script>
+</body>
+</html>

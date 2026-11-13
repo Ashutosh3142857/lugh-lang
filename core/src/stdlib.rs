@@ -23,7 +23,6 @@ use hmac::{Hmac, Mac};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::sync::OnceLock;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 type R = Result<Value, String>;
 
@@ -97,10 +96,7 @@ fn civil_from_days(z: i64) -> (i64, i64, i64) {
 }
 
 fn now_secs() -> f64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs_f64())
-        .unwrap_or(0.0)
+    crate::clock::now()
 }
 
 /// Accepts unix seconds, "YYYY-MM-DD", "YYYY-MM-DDTHH:MM[:SS][Z|+HH:MM]".
@@ -393,9 +389,32 @@ fn render(tpl: &str, scopes: &mut Vec<&Value>) -> Result<String, String> {
 
 // ───────────────────────────── randomness ─────────────────────────────
 
+fn fill_random(buf: &mut [u8]) {
+    #[cfg(feature = "native")]
+    getrandom::getrandom(buf).expect("system randomness unavailable");
+    #[cfg(not(feature = "native"))]
+    {
+        // Browser build: a xorshift generator seeded from the clock. Fine for the
+        // playground; not for secrets. Native builds use the OS generator.
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static STATE: AtomicU64 = AtomicU64::new(0);
+        let mut x = STATE.load(Ordering::Relaxed);
+        if x == 0 {
+            x = (crate::clock::now() * 1e6) as u64 | 1;
+        }
+        for b in buf.iter_mut() {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            *b = (x >> 24) as u8;
+        }
+        STATE.store(x, Ordering::Relaxed);
+    }
+}
+
 fn random_bytes<const N: usize>() -> [u8; N] {
     let mut b = [0u8; N];
-    getrandom::getrandom(&mut b).expect("system randomness unavailable");
+    fill_random(&mut b);
     b
 }
 
@@ -1052,7 +1071,7 @@ pub fn call(name: &str, args: &[Value]) -> R {
         "crypto.random_hex" => {
             let n = (opt_num(0, 16.0)? as usize).clamp(1, 1024);
             let mut b = vec![0u8; n];
-            getrandom::getrandom(&mut b).map_err(|e| e.to_string())?;
+            fill_random(&mut b);
             Value::String(hex(&b))
         }
         "crypto.equal" => {

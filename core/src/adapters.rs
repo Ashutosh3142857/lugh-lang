@@ -5,6 +5,7 @@ use crate::info::txt;
 use serde_json::Value;
 use std::io::Write;
 use std::process::Command;
+#[cfg(feature = "native")]
 use std::time::Duration;
 
 pub const KNOWN: [&str; 6] = ["http", "fs", "shell", "llm", "db", "mcp"];
@@ -28,6 +29,7 @@ pub fn effect_of(adapter: &str, method: &str) -> Option<&'static str> {
     })
 }
 
+#[cfg(feature = "native")]
 /// True when `url` should bypass the proxy: loopback hosts, or a match in NO_PROXY.
 fn no_proxy(url: &str) -> bool {
     let host = url
@@ -51,6 +53,7 @@ fn no_proxy(url: &str) -> bool {
         .any(|d| d == "*" || host == d || host.ends_with(&format!(".{d}")))
 }
 
+#[cfg(feature = "native")]
 /// HTTP client for `url`: honours HTTPS_PROXY, except for loopback and NO_PROXY hosts.
 pub fn http_agent_for(url: &str) -> ureq::Agent {
     let mut b = ureq::AgentBuilder::new()
@@ -75,6 +78,7 @@ pub fn call(adapter: &str, method: &str, args: &[Value]) -> Result<Value, String
             .ok_or_else(|| format!("{adapter}.{method} needs argument {}", i + 1))
     };
     match (adapter, method) {
+        #[cfg(feature = "native")]
         ("http", m) => {
             let url = txt(arg(0)?);
             let req = http_agent_for(&url).request(&m.to_uppercase(), &url);
@@ -135,17 +139,25 @@ pub fn call(adapter: &str, method: &str, args: &[Value]) -> Result<Value, String
                 String::from_utf8_lossy(&out.stdout).trim().to_string(),
             ))
         }
+        #[cfg(feature = "native")]
         ("db", m) => db(m, &txt(arg(0)?), args.get(1)),
+        #[cfg(feature = "native")]
         ("mcp", "tools") => crate::mcp::tools(&txt(arg(0)?)),
+        #[cfg(feature = "native")]
         ("mcp", "call") => crate::mcp::call(
             &txt(arg(0)?),
             &txt(arg(1)?),
             args.get(2).cloned().unwrap_or(Value::Null),
         ),
+        #[cfg(not(feature = "native"))]
+        ("http" | "db" | "mcp", _) => Err(format!(
+            "{adapter} is not available in this build (browser or playground)"
+        )),
         _ => Err(format!("{adapter} has no action '{method}'")),
     }
 }
 
+#[cfg(feature = "native")]
 /// SQLite through the policy gate: `db.query` (read) returns rows as objects,
 /// `db.exec` (write) returns the number of changed rows. Parameters are always
 /// bound, never spliced into SQL. The file is LUGH_DB, or lugh.db by default.
@@ -238,20 +250,33 @@ pub fn cast(v: Value, to: Option<&str>) -> Result<Value, String> {
 
 /// The only probabilistic step. Uses an LLM API when ANTHROPIC_API_KEY is set, else a local stub.
 pub fn think(prompt: &str) -> Result<String, String> {
-    let Ok(key) = std::env::var("ANTHROPIC_API_KEY") else {
+    let key = std::env::var("ANTHROPIC_API_KEY")
+        .ok()
+        .filter(|_| cfg!(feature = "native"));
+    let Some(key) = key else {
         let first = prompt.lines().next().unwrap_or_default();
         return Ok(format!(
             "[llm stub] would reason about: {}",
             first.chars().take(80).collect::<String>()
         ));
     };
+    think_remote(prompt, &key)
+}
+
+#[cfg(not(feature = "native"))]
+fn think_remote(_prompt: &str, _key: &str) -> Result<String, String> {
+    Err("think needs network access, which this build does not have".into())
+}
+
+#[cfg(feature = "native")]
+fn think_remote(prompt: &str, key: &str) -> Result<String, String> {
     let model = std::env::var("LUGH_MODEL").unwrap_or_else(|_| "claude-sonnet-5-5".into());
     let body = serde_json::json!({"model": model, "max_tokens": 400, "messages": [{"role": "user", "content": prompt}]});
     let url = std::env::var("LUGH_LLM_URL")
         .unwrap_or_else(|_| "https://api.anthropic.com/v1/messages".into());
     let resp: Value = http_agent_for(&url)
         .post(&url)
-        .set("x-api-key", &key)
+        .set("x-api-key", key)
         .set("anthropic-version", "2023-06-01")
         .send_json(body)
         .map_err(|e| e.to_string())?

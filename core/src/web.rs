@@ -756,3 +756,61 @@ async function badge(){const{data}=await api("/_lugh/api/approvals");$("[data-lu
 function refresh(){$("[data-lugh=table]").forEach(table);$("[data-lugh=list]").forEach(list);$("[data-lugh=stat]").forEach(stat);$("[data-lugh=approvals]").forEach(approvals);$("[data-lugh=audit]").forEach(audit);badge()}
 $("[data-lugh=form]").forEach(form);$("[data-lugh=button]").forEach(button);refresh();setInterval(()=>{$("[data-lugh=approvals]").forEach(approvals);badge()},2000);
 "#;
+
+// ───────────────────────────── playground server ─────────────────────────────
+
+/// `lugh playground`: serves the playground page and runs programs in the sandbox
+/// (no adapters, no disk, 10-second budget). Serves `playground/lugh.wasm` too when
+/// it exists, in which case the page runs programs in the browser instead.
+pub fn serve_playground(addr: &str, html: &'static str) -> std::io::Result<()> {
+    let listener = TcpListener::bind(addr)?;
+    println!("\n🎮 Lugh playground on http://{addr}");
+    for conn in listener.incoming() {
+        let Ok(stream) = conn else { continue };
+        std::thread::spawn(move || {
+            let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+            let req = match read_request(&stream) {
+                Ok(r) => r,
+                Err(e) => return error(&stream, 400, &e),
+            };
+            match (req.method.as_str(), req.path.as_str()) {
+                ("GET", "/") | ("GET", "/index.html") => {
+                    send(&stream, 200, "text/html; charset=utf-8", html.as_bytes())
+                }
+                ("GET", "/lugh.wasm") => match std::fs::read("playground/lugh.wasm") {
+                    Ok(bytes) => send(&stream, 200, "application/wasm", &bytes),
+                    Err(_) => error(
+                        &stream,
+                        404,
+                        "no WebAssembly build here; programs run on the server",
+                    ),
+                },
+                ("POST", "/api/run") => {
+                    let code = req
+                        .body
+                        .get("code")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string();
+                    let mode = req
+                        .body
+                        .get("mode")
+                        .and_then(Value::as_str)
+                        .unwrap_or("run")
+                        .to_string();
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    std::thread::spawn(move || {
+                        let _ = tx.send(crate::playground::run(&code, &mode));
+                    });
+                    let output = rx
+                        .recv_timeout(Duration::from_secs(15))
+                        .unwrap_or_else(|_| "❌ the program took too long and was stopped".into());
+                    send_value(&stream, 200, &serde_json::json!({ "output": output }));
+                }
+                ("GET", "/favicon.ico") => send(&stream, 204, "image/x-icon", b""),
+                _ => error(&stream, 404, "not found"),
+            }
+        });
+    }
+    Ok(())
+}
