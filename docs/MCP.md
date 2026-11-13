@@ -79,6 +79,20 @@ Options: `--use fs,http,db,mcp`, `--out file.lugh`, `--run`, `--yes` (skip the
 run confirmation and auto-approve; use only for testing). `LUGH_MODEL` selects
 the model; `LUGH_LLM_URL` points at any Anthropic-compatible Messages endpoint.
 
+### Model providers
+
+`lugh plan` and `think` speak the Anthropic Messages format, so any
+compatible provider works:
+
+| Provider | Settings |
+| --- | --- |
+| Anthropic | `ANTHROPIC_API_KEY=sk-ant-…` (default endpoint) |
+| DeepSeek | `ANTHROPIC_API_KEY=<DeepSeek key>` · `LUGH_LLM_URL=https://api.deepseek.com/anthropic/v1/messages` · `LUGH_MODEL=deepseek-flash` |
+| Self-hosted or gateway | `LUGH_LLM_URL=<your /v1/messages endpoint>` |
+
+Keep keys in the environment or a `.env` file (already in `.gitignore`), never
+in a `.lugh` program or a commit.
+
 ## Tested against
 
 - A protocol-level test server written directly from the MCP specification
