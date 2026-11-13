@@ -21,3 +21,5 @@ bench/data/
 examples/data/bookings.log
 lugh.db
 .env
+examples/data/notes.json
+plan.lugh

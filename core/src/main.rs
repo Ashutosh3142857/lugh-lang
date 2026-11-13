@@ -8,10 +8,14 @@
 //!   lugh program.lugh --quiet    print only results and errors
 //!   lugh program.lugh --serve 8080   serve its routes, pages, scheduled jobs and inbox
 //!   lugh program.lugh --test     run its `test` blocks
+//!   lugh plan "<goal>" [--use fs,db,mcp] [--out plan.lugh] [--run] [--yes]
+//!                                an LLM writes the program; you review it before it runs
 
 mod adapters;
 mod info;
+mod mcp;
 mod parser;
+mod plan;
 mod runtime;
 mod stdlib;
 mod web;
@@ -226,8 +230,106 @@ fn setup(rt: &mut Runtime, top: &Line) -> Result<Program, String> {
     })
 }
 
+/// Compile without running: parse, load the header, check function names.
+fn compile_check(src: &str) -> Result<(), String> {
+    let tree = build_tree(src);
+    let top = tree
+        .first()
+        .filter(|l| l.text.starts_with("agent "))
+        .ok_or("a Lugh program must start with: agent <Name>")?;
+    let mut rt = Runtime::new(true).map_err(|e| e.to_string())?;
+    setup(&mut rt, top).map(|_| ())
+}
+
+fn plan_command(args: &[String]) -> ExitCode {
+    let flag = |f: &str| args.iter().any(|a| a == f);
+    let value = |f: &str| {
+        args.iter()
+            .position(|a| a == f)
+            .and_then(|i| args.get(i + 1))
+            .cloned()
+    };
+    let Some(goal) = args.iter().skip(2).find(|a| {
+        !a.starts_with("--")
+            && Some(*a) != value("--use").as_ref()
+            && Some(*a) != value("--out").as_ref()
+    }) else {
+        eprintln!(
+            "usage: lugh plan \"<goal>\" [--use fs,http,db,mcp] [--out plan.lugh] [--run] [--yes]"
+        );
+        return ExitCode::from(1);
+    };
+    let adapters: Vec<String> = value("--use")
+        .map(|u| {
+            u.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+    if let Some(bad) = adapters
+        .iter()
+        .find(|a| !adapters::KNOWN.contains(&a.as_str()))
+    {
+        eprintln!(
+            "❌ unknown adapter '{bad}' (available: {})",
+            adapters::KNOWN.join(", ")
+        );
+        return ExitCode::from(1);
+    }
+    let out = value("--out").unwrap_or_else(|| "plan.lugh".into());
+    println!("\n🧭 Planning: {goal}");
+    let program = match plan::generate(goal, &adapters, 3, compile_check) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("❌ {e}");
+            return ExitCode::from(2);
+        }
+    };
+    if let Err(e) = std::fs::write(&out, format!("{program}\n")) {
+        eprintln!("❌ cannot write {out}: {e}");
+        return ExitCode::from(1);
+    }
+    println!("\n📄 {out}\n");
+    for line in program.lines() {
+        println!("   {line}");
+    }
+    let me = std::env::current_exe().expect("own path");
+    println!("\n🔎 What it can do:");
+    let _ = std::process::Command::new(&me)
+        .args([out.as_str(), "--check"])
+        .status();
+    if !flag("--run") {
+        println!("\nReview {out}, then run it with: lugh {out}");
+        return ExitCode::SUCCESS;
+    }
+    println!("\n🛡  Plan safety: a generated program may only read on its own; everything else asks you, and delete is denied.");
+    if !flag("--yes") {
+        print!("   Run this program now? [y/N] ");
+        let _ = std::io::Write::flush(&mut std::io::stdout());
+        let mut ans = String::new();
+        let _ = std::io::stdin().read_line(&mut ans);
+        if !matches!(ans.trim().to_lowercase().as_str(), "y" | "yes") {
+            println!("   Not run. The program is saved in {out}.");
+            return ExitCode::SUCCESS;
+        }
+    }
+    let mut run = std::process::Command::new(&me);
+    run.args([out.as_str(), "--plan-safe"]);
+    if flag("--yes") {
+        run.arg("--yes");
+    }
+    match run.status() {
+        Ok(s) if s.success() => ExitCode::SUCCESS,
+        _ => ExitCode::from(1),
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("plan") {
+        return plan_command(&args);
+    }
     let Some(path) = args.iter().skip(1).find(|a| !a.starts_with("--")) else {
         eprintln!("usage: lugh <program.lugh> [--yes] [--check] [--eval] [--quiet]");
         return ExitCode::from(1);
@@ -262,6 +364,11 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    if flag("--plan-safe") {
+        // Generated programs: whatever policy the model wrote, only reads run unasked.
+        rt.allow.retain(|e| e == "read");
+        rt.deny.insert("delete".into());
+    }
 
     let mut allow: Vec<_> = rt.allow.iter().cloned().collect();
     allow.sort();
@@ -283,6 +390,10 @@ fn main() -> ExitCode {
             calls_in_block(body, &mut calls);
             for (no, a, m) in calls.into_iter().filter(|c| !c.1.is_empty()) {
                 let eff = adapters::effect_of(&a, &m).unwrap_or("unknown");
+                if eff == "dynamic" {
+                    println!("  line {no:>3}: {:<14} effect=per tool  → decided from the tool's MCP annotations at call time", format!("{a}.{m}"));
+                    continue;
+                }
                 let rule = if rt.deny.contains(eff) {
                     "DENIED"
                 } else if rt.allow.contains(eff) {

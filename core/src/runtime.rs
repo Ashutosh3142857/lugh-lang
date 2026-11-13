@@ -1007,6 +1007,15 @@ impl Runtime {
                     })
                     .collect();
                 let desc = format!("{adapter}.{method} {}", shown.join(" "));
+                let effect = if effect == "dynamic" {
+                    let (server, tool) = (
+                        vals.first().map(txt).unwrap_or_default(),
+                        vals.get(1).map(txt).unwrap_or_default(),
+                    );
+                    crate::mcp::tool_effect(&server, &tool).map_err(Flow::Fail)?
+                } else {
+                    effect
+                };
                 self.gate(effect, &desc)?;
                 self.say("→", &desc);
                 let t0 = Instant::now();

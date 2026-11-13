@@ -7,7 +7,7 @@ use std::io::Write;
 use std::process::Command;
 use std::time::Duration;
 
-pub const KNOWN: [&str; 5] = ["http", "fs", "shell", "llm", "db"];
+pub const KNOWN: [&str; 6] = ["http", "fs", "shell", "llm", "db", "mcp"];
 
 pub fn effect_of(adapter: &str, method: &str) -> Option<&'static str> {
     Some(match (adapter, method) {
@@ -21,20 +21,49 @@ pub fn effect_of(adapter: &str, method: &str) -> Option<&'static str> {
         ("shell", "run") => "execute",
         ("db", "query") => "read",
         ("db", "exec") => "write",
+        ("mcp", "tools") => "read",
+        // Decided per tool from its MCP annotations, just before the call.
+        ("mcp", "call") => "dynamic",
         _ => return None,
     })
 }
 
-fn agent() -> ureq::Agent {
-    let mut b = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(10))
-        .user_agent("lugh/0.3");
-    if let Some(p) = std::env::var("HTTPS_PROXY")
-        .ok()
-        .or_else(|| std::env::var("https_proxy").ok())
+/// True when `url` should bypass the proxy: loopback hosts, or a match in NO_PROXY.
+fn no_proxy(url: &str) -> bool {
+    let host = url
+        .split("://")
+        .nth(1)
+        .unwrap_or(url)
+        .split(['/', ':', '?'])
+        .next()
+        .unwrap_or("")
+        .to_lowercase();
+    if host == "localhost" || host == "::1" || host.starts_with("127.") || host.starts_with("[::1]")
     {
-        if let Ok(proxy) = ureq::Proxy::new(p) {
-            b = b.proxy(proxy);
+        return true;
+    }
+    let list = std::env::var("NO_PROXY")
+        .or_else(|_| std::env::var("no_proxy"))
+        .unwrap_or_default();
+    list.split(',')
+        .map(|d| d.trim().trim_start_matches('.').to_lowercase())
+        .filter(|d| !d.is_empty())
+        .any(|d| d == "*" || host == d || host.ends_with(&format!(".{d}")))
+}
+
+/// HTTP client for `url`: honours HTTPS_PROXY, except for loopback and NO_PROXY hosts.
+pub fn http_agent_for(url: &str) -> ureq::Agent {
+    let mut b = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(60))
+        .user_agent(concat!("lugh/", env!("CARGO_PKG_VERSION")));
+    if !no_proxy(url) {
+        if let Some(p) = std::env::var("HTTPS_PROXY")
+            .ok()
+            .or_else(|| std::env::var("https_proxy").ok())
+        {
+            if let Ok(proxy) = ureq::Proxy::new(p) {
+                b = b.proxy(proxy);
+            }
         }
     }
     b.build()
@@ -48,7 +77,7 @@ pub fn call(adapter: &str, method: &str, args: &[Value]) -> Result<Value, String
     match (adapter, method) {
         ("http", m) => {
             let url = txt(arg(0)?);
-            let req = agent().request(&m.to_uppercase(), &url);
+            let req = http_agent_for(&url).request(&m.to_uppercase(), &url);
             let resp = match args.get(1) {
                 Some(body) => req.send_json(body.clone()),
                 None => req.call(),
@@ -107,6 +136,12 @@ pub fn call(adapter: &str, method: &str, args: &[Value]) -> Result<Value, String
             ))
         }
         ("db", m) => db(m, &txt(arg(0)?), args.get(1)),
+        ("mcp", "tools") => crate::mcp::tools(&txt(arg(0)?)),
+        ("mcp", "call") => crate::mcp::call(
+            &txt(arg(0)?),
+            &txt(arg(1)?),
+            args.get(2).cloned().unwrap_or(Value::Null),
+        ),
         _ => Err(format!("{adapter} has no action '{method}'")),
     }
 }
@@ -212,8 +247,10 @@ pub fn think(prompt: &str) -> Result<String, String> {
     };
     let model = std::env::var("LUGH_MODEL").unwrap_or_else(|_| "claude-sonnet-5-5".into());
     let body = serde_json::json!({"model": model, "max_tokens": 400, "messages": [{"role": "user", "content": prompt}]});
-    let resp: Value = agent()
-        .post("https://api.anthropic.com/v1/messages")
+    let url = std::env::var("LUGH_LLM_URL")
+        .unwrap_or_else(|_| "https://api.anthropic.com/v1/messages".into());
+    let resp: Value = http_agent_for(&url)
+        .post(&url)
         .set("x-api-key", &key)
         .set("anthropic-version", "2023-06-01")
         .send_json(body)
