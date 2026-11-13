@@ -1,0 +1,4 @@
+# Lugh core has no dependencies (Python 3.9+ standard library only).
+
+# Optional: browser adapter
+# playwright>=1.40

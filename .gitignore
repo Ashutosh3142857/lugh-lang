@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Lugh runtime output
+lugh_audit.jsonl
+lugh_memory.json
+examples/bookings.log
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
