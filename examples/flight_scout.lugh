@@ -1,0 +1,40 @@
+# Lugh demo: find the cheapest fare, check it against a budget,
+# get a human's OK, then notify. Runs offline: if the API is
+# unreachable, it falls back to a local data file.
+
+agent FlightScout
+  use http, fs, shell, llm
+  budget time 2m, calls 20, spend 0 INR
+  policy
+    allow read, write
+    ask human before send, spend, submit
+    deny delete
+
+  goal "Find the cheapest Delhi to Dublin fare under 45000 INR"
+    let fares = attempt
+      http.get "https://api.flights.example/search?from=DEL&to=DUB" as json
+    otherwise
+      fs.read "examples/fares.json" as json
+
+    log "Found {fares.0.airline} and others"
+    let best = pick lowest price from fares
+    ensure best.price < 45000 else stop "Nothing under budget"
+
+    let last = recall "best_fare"
+    when last
+      log "Last run's best was {last.airline} at {last.price}"
+
+    let checks = together
+      shell.run "date +%F"
+      fs.list "examples"
+
+    let note = think "Write one line advising whether to book now" with best
+    log note
+
+    remember "best_fare" = best
+    ask human "Book {best.airline} {best.depart} at INR {best.price}?" -> ok
+    when ok
+      send console "#travel" "Booking {best.airline} at INR {best.price}"
+      fs.append "examples/bookings.log" best
+    otherwise
+      log "Not booked - human said no"
