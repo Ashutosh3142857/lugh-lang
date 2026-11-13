@@ -1,19 +1,52 @@
 #!/usr/bin/env python3
 """
-Lugh v0.1 — a programming language for AI agents.
+Lugh v0.2 — a programming language for AI agents.
 Named for Lugh, the Irish god "skilled in all the arts" — an agent that can use every tool.
 
-Prototype interpreter: parses .lugh programs, enforces policy + budget,
+Interpreter: parses .lugh programs, enforces policy + budget,
 routes every action through adapters to existing infrastructure,
-and writes an audit log of every effect.
+writes an audit log of every effect, and learns which routes work.
+
+v0.2 adds primitives drawn from foundational ML research: attention-style
+relevance (attend), grounded extraction (point), content-addressed memory
+(recall like), gated forgetting (keep), residual refinement (refine),
+ensemble consensus, adaptive route ordering (attempt auto), pipelined
+loops (parallel), compression-based novelty and simplicity (MDL), pairwise
+relational queries (pairs), test-time sampling (samples) and a
+simplicity-weighted evaluation score (--eval). See docs/RESEARCH.md.
 
 Usage:
     python lugh.py program.lugh            # interactive approvals
     python lugh.py program.lugh --yes      # auto-approve (for demos/CI)
     python lugh.py program.lugh --check    # parse + static policy check only
+    python lugh.py program.lugh --eval     # run and report a weighted score
 """
-import json, os, re, subprocess, sys, threading, time, urllib.request
+import json, math, os, re, subprocess, sys, threading, time, urllib.request, zlib
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+
+# ───────────────────────── 0. Information-theoretic helpers (MDL / Kolmogorov) ─────────────────────────
+
+def _txt(v):
+    return v if isinstance(v, str) else json.dumps(v, ensure_ascii=False, sort_keys=True, default=str)
+
+def K(v):
+    """Description length in bytes: a computable upper bound on Kolmogorov complexity."""
+    return len(zlib.compress(_txt(v).encode("utf-8"), 9))
+
+def ncd(a, b):
+    """Normalized compression distance (0 = same information, ~1 = unrelated)."""
+    ka, kb, kab = K(a), K(b), K(_txt(a) + " " + _txt(b))
+    return (kab - min(ka, kb)) / max(ka, kb, 1)
+
+def _tokens(s):
+    return set(re.findall(r"[a-z0-9]+", _txt(s).lower()))
+
+def relevance(query, item):
+    """Attention-style score: token overlap blended with compression similarity."""
+    q = _tokens(query)
+    overlap = len(q & _tokens(item)) / max(len(q), 1)
+    return 0.7 * overlap + 0.3 * (1 - min(ncd(query, item), 1))
 
 EFFECTS = {"read", "write", "send", "spend", "delete", "submit", "execute"}
 
@@ -55,7 +88,7 @@ TOKEN_RE = re.compile(r'''
     (?P<str>"(?:[^"\\]|\\.)*")
   | (?P<num>\d+(?:\.\d+)?)
   | (?P<op><=|>=|==|!=|->|[<>+\-*/=\[\],():])
-  | (?P<name>[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)
+  | (?P<name>[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*)
   | (?P<ws>\s+)
 ''', re.X)
 
@@ -147,13 +180,37 @@ class Expr:
             return ("pick", mode, field, self.primary())
         if val == "count":          # count fares
             self.eat(); return ("count", self.primary())
-        if val == "recall":         # recall "key"
-            self.eat(); return ("recall", self.primary())
-        if val == "think":          # think "prompt" [with expr]
-            self.eat(); prompt = self.primary(); ctx = None
+        if val == "recall":         # recall "key"  |  recall like "query"
+            self.eat()
+            if self.peek()[1] == "like":
+                self.eat(); return ("recall_like", self.primary())
+            return ("recall", self.primary())
+        if val == "think":          # think "prompt" [with expr] [samples N]
+            self.eat(); prompt = self.primary(); ctx = None; n = ("lit", 1)
             if self.peek()[1] == "with":
                 self.eat(); ctx = self.primary()
-            return ("think", prompt, ctx)
+            if self.peek()[1] == "samples":
+                self.eat(); n = self.primary()
+            return ("think", prompt, ctx, n)
+        if val == "attend":         # attend to items by "query" [top N]
+            self.eat(); self.eat("to"); src = self.primary(); self.eat("by"); q = self.primary(); n = ("lit", 3)
+            if self.peek()[1] == "top":
+                self.eat(); n = self.primary()
+            return ("attend", src, q, n)
+        if val == "point":          # point to "query" in text
+            self.eat(); self.eat("to"); q = self.primary(); self.eat("in")
+            return ("point", q, self.primary())
+        if val == "novelty":        # novelty x [against list]
+            self.eat(); x = self.primary(); ref = None
+            if self.peek()[1] == "against":
+                self.eat(); ref = self.primary()
+            return ("novelty", x, ref)
+        if val == "simplest":       # simplest of list
+            self.eat(); self.eat("of"); return ("simplest", self.primary())
+        if val == "pairs":          # pairs a from X, b from Y where cond
+            self.eat(); a = self.eat()[1]; self.eat("from"); xs = self.primary(); self.eat(",")
+            b = self.eat()[1]; self.eat("from"); ys = self.primary(); self.eat("where")
+            return ("pairs", a, xs, b, ys, self.or_())
         if val == "ask" and self.peek(1)[1] == "human":
             self.eat(); self.eat(); return ("ask_human", self.primary())
         if kind == "name":
@@ -277,6 +334,41 @@ class Runtime:
         self.calls = 0
         self.lock = threading.Lock()
         self.memory = json.load(open(memory_path)) if os.path.exists(memory_path) else {}
+        self.forget_expired()
+        self.stats_path = "lugh_stats.json"
+        self.stats = json.load(open(self.stats_path)) if os.path.exists(self.stats_path) else {}
+        self.results = []
+
+    # ---- gated memory (LSTM-style forget gate) ----
+    def forget_expired(self):
+        exp = self.memory.setdefault("__expires__", {})
+        now = time.time()
+        for key in [k for k, t in exp.items() if t < now]:
+            self.memory.pop(key, None); exp.pop(key, None)
+
+    def recall_like(self, query):
+        """Content-addressed read (Neural Turing Machine style): best match by key + value."""
+        items = [(k, v) for k, v in self.memory.items() if not k.startswith("__")]
+        if not items: return None
+        k, v = max(items, key=lambda kv: relevance(query, kv[0] + " " + _txt(kv[1])))
+        if relevance(query, k + " " + _txt(v)) < 0.15: return None
+        self.audit("recall_like", query=query, key=k)
+        return v
+
+    # ---- adaptive route ordering (Adam-style moment estimates) ----
+    def route_score(self, key):
+        s = self.stats.get(key)
+        if not s: return 0.5                                   # untried routes sit in the middle
+        b1, b2, t = 0.9, 0.999, s["t"]
+        m_hat = s["m"] / (1 - b1 ** t)                         # bias-corrected success rate
+        v_hat = s["v"] / (1 - b2 ** t)                         # bias-corrected squared latency
+        return m_hat / (math.sqrt(v_hat) + 1.0)
+
+    def route_update(self, key, ok, secs):
+        s = self.stats.setdefault(key, {"m": 0.0, "v": 0.0, "t": 0})
+        s["t"] += 1
+        s["m"] = 0.9 * s["m"] + 0.1 * (1.0 if ok else 0.0)
+        s["v"] = 0.999 * s["v"] + 0.001 * secs ** 2
 
     # ---- audit ----
     def audit(self, kind, **kw):
@@ -340,18 +432,30 @@ class Runtime:
             print(f"\n🎯 goal: {goal_text}")
             self.audit("goal_start", goal=goal_text)
             env = {"memory": self.memory}
+            src = "\n".join(l.text for l in self._walk(g.children))
             try:
                 self.block(g.children, env)
                 self.audit("goal_done", goal=goal_text)
-                print("✅ goal complete")
+                print("✅ goal complete"); self.results.append((goal_text, 1.0, src))
             except Stop as s:
                 self.audit("goal_stopped", goal=goal_text, reason=str(s))
-                print(f"⏹  stopped: {s}")
+                print(f"⏹  stopped: {s}"); self.results.append((goal_text, 0.5, src))
             except LughError as e:
                 self.audit("goal_failed", goal=goal_text, error=str(e))
-                print(f"❌ failed: {e}")
-        json.dump(self.memory, open(self.memory_path, "w"), indent=2, ensure_ascii=False)
-        print(f"\n📜 audit log → {self.audit_path}   🧠 memory → {self.memory_path}")
+                print(f"❌ failed: {e}"); self.results.append((goal_text, 0.0, src))
+        json.dump(self.memory, open(self.memory_path, "w"), indent=2, ensure_ascii=False, default=str)
+        json.dump(self.stats, open(self.stats_path, "w"), indent=2)
+        print(f"\n📜 audit log → {self.audit_path}   🧠 memory → {self.memory_path}   📈 route stats → {self.stats_path}")
+
+    def report_score(self):
+        """Simplicity-weighted success, after Legg & Hutter: sum of 2^-K(goal) * value, normalised."""
+        if not self.results: return
+        w = [(g, v, 2 ** (-K(src) / 256)) for g, v, src in self.results]
+        score = sum(v * wt for _, v, wt in w) / sum(wt for *_, wt in w)
+        print("\n📊 evaluation")
+        for g, v, wt in w:
+            print(f"  {v:.1f}  weight {wt:.3f}  {g}")
+        print(f"  weighted score: {score:.3f}  (1.0 = every goal done)")
 
     def setup_use(self, spec):
         for name in [s.strip() for s in spec.split(",") if s.strip()]:
@@ -419,12 +523,25 @@ class Runtime:
             name, rhs = m.groups()
             if rhs == "attempt":
                 val, used = self.attempt(ln, nxt, env); env[name] = val; return val, used
+            if rhs == "attempt auto":
+                env[name] = self.attempt_auto(ln, env); return env[name], False
             if rhs == "together":
                 env[name] = self.together(ln, env); return env[name], False
+            if rhs.startswith("consensus"):
+                m2 = re.match(r"consensus(?:\s+min\s+(\d+))?$", rhs)
+                env[name] = self.consensus(ln, env, int(m2.group(1)) if m2 and m2.group(1) else None)
+                return env[name], False
             env[name] = self.eval_str(rhs, env, ln); return env[name], False
 
+        if t == "attempt auto":
+            return self.attempt_auto(ln, env), False
         if head == "attempt":
             return self.attempt(ln, nxt, env)
+
+        if head == "refine":     # refine x with <expr> until <cond> [rounds N]
+            m = re.match(r"refine\s+(\w+)\s+with\s+(.*?)\s+until\s+(.*?)(?:\s+rounds\s+(\d+))?$", t)
+            if not m: raise LughError(f"line {ln.no}: refine <name> with <expr> until <cond> [rounds N]")
+            return self.refine(env, m.group(1), m.group(2), m.group(3), int(m.group(4) or 3), ln), False
 
         if head == "ensure":     # ensure <cond> else stop "msg" | else ask human "msg"
             cond, _, fallback = t[7:].partition(" else ")
@@ -439,11 +556,18 @@ class Runtime:
                 raise Stop("human chose to stop")
             raise Stop(f"ensure failed: {cond.strip()}")
 
-        if head == "remember":   # remember "key" = expr
-            m = re.match(r'remember\s+("[^"]+")\s*=\s*(.*)$', t)
+        if head == "remember":   # remember "key" = expr [keep 7d]
+            m = re.match(r'remember\s+("[^"]+")\s*=\s*(.*?)(?:\s+keep\s+(\d+)([smhd]))?$', t)
             key = m.group(1)[1:-1]; val = self.eval_str(m.group(2), env, ln)
             self.memory[key] = val; self.audit("remember", key=key, value=val)
-            self.say("🧠", f"remembered '{key}'"); return val, False
+            exp = self.memory.setdefault("__expires__", {})
+            if m.group(3):
+                secs = int(m.group(3)) * {"s": 1, "m": 60, "h": 3600, "d": 86400}[m.group(4)]
+                exp[key] = time.time() + secs
+                self.say("🧠", f"remembered '{key}' for {m.group(3)}{m.group(4)}")
+            else:
+                exp.pop(key, None); self.say("🧠", f"remembered '{key}'")
+            return val, False
 
         if head == "ask":        # ask human "question" -> name
             m = re.match(r'ask\s+human\s+(.*?)\s*->\s*(\w+)$', t)
@@ -459,10 +583,19 @@ class Runtime:
                 return self.block(nxt.children, env), True
             return None, False
 
-        if head == "each":       # each item in list
-            m = re.match(r"each\s+(\w+)\s+in\s+(.*)$", t)
+        if head == "each":       # each item in list [parallel N]
+            m = re.match(r"each\s+(\w+)\s+in\s+(.*?)(?:\s+parallel\s+(\d+))?$", t)
+            items = list(self.eval_str(m.group(2), env, ln) or [])
+            if m.group(3):       # pipelined: N workers stream items through the block
+                def run(item):
+                    local = dict(env); local[m.group(1)] = item
+                    return self.block(ln.children, local)
+                with ThreadPoolExecutor(max_workers=int(m.group(3))) as ex:
+                    out = list(ex.map(run, items))
+                self.say("⇉", f"processed {len(items)} items on {m.group(3)} workers")
+                return out, False
             out = []
-            for item in self.eval_str(m.group(2), env, ln) or []:
+            for item in items:
                 env[m.group(1)] = item; out.append(self.block(ln.children, env))
             return out, False
 
@@ -499,6 +632,51 @@ class Runtime:
                 return self.block(nxt.children, env), True
             raise
 
+    def attempt_auto(self, ln, env):
+        """Each child line is an alternative route; try them best-first by learned score."""
+        routes = sorted(ln.children, key=lambda c: self.route_score(c.text), reverse=True)
+        self.say("🧭", "route order: " + " > ".join(r.text.split()[0] for r in routes))
+        last_err = None
+        for r in routes:
+            t0 = time.time()
+            try:
+                v = self.block([r], dict(env))
+                self.route_update(r.text, True, time.time() - t0)
+                self.say("✔", f"route succeeded: {r.text.split()[0]}"); return v
+            except (LughError, OSError) as e:
+                if isinstance(e, (PolicyDenied, BudgetExceeded)): raise
+                self.route_update(r.text, False, time.time() - t0)
+                self.audit("route_failed", route=r.text, error=str(e)); last_err = e
+                self.say("↪", f"route failed: {r.text.split()[0]} → next")
+        raise LughError(f"all routes failed; last error: {last_err}")
+
+    def consensus(self, ln, env, need):
+        """Ask several independent sources; accept only a value enough of them agree on."""
+        vals = self.together(ln, env)
+        keyed = Counter(_txt(v) for v in vals)
+        top, votes = keyed.most_common(1)[0]
+        need = need or (len(vals) // 2 + 1)
+        self.audit("consensus", sources=len(vals), votes=votes, needed=need)
+        if votes < need:
+            raise LughError(f"no consensus: best value had {votes}/{len(vals)} votes, needed {need}")
+        self.say("🤝", f"consensus {votes}/{len(vals)}")
+        return next(v for v in vals if _txt(v) == top)
+
+    def refine(self, env, name, gen, cond, rounds, ln):
+        """Residual refinement: propose, keep a proposal only if it passes; else fall back to the original."""
+        original = env.get(name)
+        if self.truthy(self.eval_str(cond, env, ln)):
+            return original
+        for r in range(1, rounds + 1):
+            env[name] = self.eval_str(gen, env, ln)
+            if self.truthy(self.eval_str(cond, env, ln)):
+                self.audit("refine", name=name, rounds=r, accepted=True)
+                self.say("♻", f"refined '{name}' in {r} round(s)"); return env[name]
+        env[name] = original                                   # identity skip: never end worse than we began
+        self.audit("refine", name=name, rounds=rounds, accepted=False)
+        self.say("♻", f"refine of '{name}' did not pass in {rounds} rounds — kept original")
+        return original
+
     def together(self, ln, env):
         """Run each child line in parallel; returns list of results."""
         with ThreadPoolExecutor(max_workers=8) as ex:
@@ -511,7 +689,7 @@ class Runtime:
         elif channel == "file":
             open(target, "a", encoding="utf-8").write(msg + "\n"); self.say("📣", f"wrote to {target}")
         else:
-            # v0.1: other channels (slack, email, whatsapp...) map to MCP servers in v0.2
+            # other channels (slack, email, whatsapp...) map to MCP servers (roadmap)
             print(f"  📣 [{channel}:{target}] {msg}   (simulated — connect an MCP server for real delivery)")
         self.audit("sent", channel=channel, target=target, message=msg)
 
@@ -547,8 +725,50 @@ class Runtime:
             return fn(items, key=lambda x: x[field])
         if k == "count": return len(self.eval(node[1], env))
         if k == "recall": return self.memory.get(self.eval(node[1], env))
+        if k == "recall_like": return self.recall_like(self.eval(node[1], env))
         if k == "ask_human": return self.human_approves(self.eval(node[1], env))
-        if k == "think": return self.think(self.eval(node[1], env), self.eval(node[2], env) if node[2] else None)
+        if k == "think":
+            prompt = self.eval(node[1], env)
+            ctx = self.eval(node[2], env) if node[2] else None
+            n = int(self.eval(node[3], env))
+            if n <= 1: return self.think(prompt, ctx)
+            outs = [self.think(prompt, ctx) for _ in range(n)]          # test-time sampling
+            best, votes = Counter(outs).most_common(1)[0]
+            self.audit("vote", samples=n, agreement=round(votes / n, 2))
+            self.say("🗳", f"think: {votes}/{n} samples agree")
+            return best
+        if k == "attend":
+            items = list(self.eval(node[1], env) or [])
+            q, n = self.eval(node[2], env), int(self.eval(node[3], env))
+            ranked = sorted(items, key=lambda it: relevance(q, it), reverse=True)[:n]
+            self.audit("attend", query=q, considered=len(items), kept=len(ranked))
+            return ranked
+        if k == "point":
+            q, text = self.eval(node[1], env), _txt(self.eval(node[2], env))
+            spans = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", text) if s.strip()]
+            if not spans: return None
+            best = max(spans, key=lambda s: relevance(q, s))
+            if relevance(q, best) == 0: return None
+            assert best in text                                         # grounded: always a verbatim span
+            self.audit("point", query=q, span=best)
+            return best
+        if k == "novelty":
+            x = self.eval(node[1], env)
+            ref = self.eval(node[2], env) if node[2] else [v for kk, v in self.memory.items() if not kk.startswith("__")]
+            return round(min((ncd(x, r) for r in ref), default=1.0), 3)
+        if k == "simplest":
+            items = list(self.eval(node[1], env) or [])
+            if not items: raise LughError("simplest of an empty list")
+            return min(items, key=K)
+        if k == "pairs":
+            _, a, xs, b, ys, cond = node
+            out, local = [], dict(env)
+            for x in self.eval(xs, env) or []:
+                for y in self.eval(ys, env) or []:
+                    local[a], local[b] = x, y
+                    if self.truthy(self.eval(cond, local)):
+                        out.append({a: x, b: y})
+            return out
         if k == "call":
             _, name, args, cast = node
             adapter_name, method = name.split(".", 1)
@@ -614,6 +834,7 @@ def main():
     rt = Runtime(auto_yes="--yes" in sys.argv)
     try:
         rt.run_source(open(path, encoding="utf-8").read(), check_only="--check" in sys.argv)
+        if "--eval" in sys.argv: rt.report_score()
     except LughError as e:
         print(f"❌ {e}"); sys.exit(2)
 

@@ -13,3 +13,5 @@ examples/bookings.log
 .DS_Store
 .idea/
 .vscode/
+lugh_stats.json
+examples/data/reconciled.log
