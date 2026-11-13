@@ -8,8 +8,17 @@ cd core && cargo build --release
 ./target/release/lugh ../examples/research_desk.lugh --yes --eval
 ```
 
+Browser build (needs the `wasm32-unknown-unknown` target):
+
+```bash
+cargo rustc --release --lib --no-default-features --target wasm32-unknown-unknown --crate-type cdylib
+```
+
+The `native` feature (on by default) adds everything that needs the operating
+system: HTTP, SQLite, MCP, the LLM client and `lugh plan`.
+
 Flags: `--yes` (auto-approve), `--check` (static policy report), `--eval`
-(weighted score), `--quiet`, `--test` (run `test` blocks), `--serve [port]`
+(weighted score), `--quiet`, `--lint` (errors as JSON, for editors), `--test` (run `test` blocks), `--serve [port]`
 (run routes, pages and scheduled jobs; add `--public` to bind all interfaces).
 
 Tests: `cargo test --release` runs the example programs, the standard-library
@@ -27,6 +36,9 @@ through the inbox, token auth and scheduled jobs; MCP effects and policy against
 | `plan.rs` | `lugh plan`: prompt construction with the real adapter and MCP tool lists, compile-and-repair loop. |
 | `web.rs` | Backend and frontend frameworks: a small HTTP/1.1 server on `std::net` (thread per connection), route matching with `:params`, the server-side page renderer with a ~3 KB script, and the approvals inbox. No web dependencies. |
 | `stdlib.rs` | The standard library: text, list, math, stats, time, json, csv, crypto, encode, schema, template, env. Pure functions; unknown names are rejected at compile time. |
+| `lib.rs`, `program.rs` | The library behind every front end: loading a program, compile-time checks. |
+| `playground.rs`, `wasm.rs` | The sandboxed runner, and its WebAssembly entry points for the browser. |
+| `clock.rs` | Time that works natively and in the browser. |
 | `info.rs` | Canonical JSON text and zlib description length, byte-compatible with the Python runtime, so `attend`, `novelty` and `simplest` give identical answers in both. |
 
 Engineering choices:

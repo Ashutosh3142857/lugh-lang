@@ -27,6 +27,18 @@ agent FlightScout
       send console "#travel" "Booking {best.airline}"
 ```
 
+## Try it
+
+- **In your browser:** the [Lugh Playground](https://ashutosh3142857.github.io/lugh-lang/) runs Lugh
+  compiled to WebAssembly, with nothing to install.
+- **Locally:** `lugh playground` serves the same page on http://127.0.0.1:8000.
+- **In VS Code:** the [extension](editors/vscode) adds highlighting, snippets,
+  live error checking and run commands.
+
+The playground is sandboxed: adapters that touch files, networks and services
+are disabled, nothing is written to disk, and every run has a 10-second budget
+that also stops runaway computation.
+
 ## Why a new language
 
 Agent frameworks keep the things that matter most — permissions, spending limits, human approval, recovery from failure, an audit trail — outside the code, in config files and prompts. Lugh makes them **syntax**, so they are checked before a program runs and recorded while it runs.
@@ -245,11 +257,12 @@ An adapter is one class: a map of `verb → effect` and a `call(verb, args)` met
 3. **Full stack (v0.4)** ✓ — routes, pages, approvals inbox, end-to-end tests
 4. **Standard library (v0.5)** ✓ — 100+ functions, SQLite, tests, jobs, auth, object literals
 5. **Connect (v0.6)** ✓ — MCP client, `lugh plan` with self-repair and plan safety
-6. **Compile (v0.7)** — bytecode VM, field access compiled to fixed slots, WebAssembly build
-7. **Reach (v0.8)** — editor support, browser playground (WebAssembly), package manager, multi-agent message passing
-8. **Desktop (v0.9)** — desktop app adapter, screen fallback, spend metering
-9. **Trust (v1.0)** — TLS, user accounts and roles for served apps, signed audit logs, shareable policy packs, automatic fallback ladder
-10. **Platform** — hosted runtime, adapter marketplace, team approvals
+6. **Reach (v0.7)** ✓ — browser playground (WebAssembly), VS Code extension, multi-line lists and objects, CI
+7. **Compile (v0.8)** — bytecode VM, field access compiled to fixed slots
+8. **Ecosystem (v0.9)** — package manager, language server, multi-agent message passing
+9. **Desktop (v0.10)** — desktop app adapter, screen fallback, spend metering
+10. **Trust (v1.0)** — TLS, user accounts and roles for served apps, signed audit logs, shareable policy packs, automatic fallback ladder
+11. **Platform** — hosted runtime, adapter marketplace, team approvals
 
 ## Support Lugh
 
