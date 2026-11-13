@@ -4,7 +4,9 @@
 //! std::time is not available in the browser.
 
 #[cfg(target_arch = "wasm32")]
+#[link(wasm_import_module = "env")]
 extern "C" {
+    // Supplied by the host page as `env.lugh_now_ms` (Date.now()).
     fn lugh_now_ms() -> f64;
 }
 
