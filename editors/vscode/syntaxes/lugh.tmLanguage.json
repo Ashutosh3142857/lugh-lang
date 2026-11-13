@@ -1,0 +1,116 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Lugh",
+  "scopeName": "source.lugh",
+  "fileTypes": ["lugh"],
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#declaration" },
+    { "include": "#string" },
+    { "include": "#number" },
+    { "include": "#constant" },
+    { "include": "#effect" },
+    { "include": "#http-method" },
+    { "include": "#adapter-call" },
+    { "include": "#function-call" },
+    { "include": "#keyword" },
+    { "include": "#page-element" },
+    { "include": "#operator" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "#.*$",
+      "name": "comment.line.number-sign.lugh"
+    },
+    "declaration": {
+      "match": "^\\s*(agent)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.declaration.agent.lugh" },
+        "2": { "name": "entity.name.type.agent.lugh" }
+      }
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"",
+      "name": "string.quoted.double.lugh",
+      "patterns": [
+        { "match": "\\\\.", "name": "constant.character.escape.lugh" },
+        {
+          "begin": "\\{(?=[^\\s}])",
+          "end": "\\}",
+          "name": "meta.interpolation.lugh",
+          "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.lugh" } },
+          "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.lugh" } },
+          "contentName": "source.lugh.embedded",
+          "patterns": [
+            { "include": "#number" },
+            { "include": "#constant" },
+            { "include": "#function-call" },
+            { "include": "#keyword" },
+            { "include": "#operator" },
+            { "match": "[A-Za-z_][A-Za-z0-9_.]*", "name": "variable.other.lugh" }
+          ]
+        }
+      ]
+    },
+    "number": {
+      "match": "\\b\\d+(\\.\\d+)?\\b",
+      "name": "constant.numeric.lugh"
+    },
+    "constant": {
+      "match": "\\b(true|false|none)\\b",
+      "name": "constant.language.lugh"
+    },
+    "effect": {
+      "match": "\\b(read|write|send|spend|delete|submit|execute)\\b(?=\\s*(,|$))",
+      "name": "support.constant.effect.lugh"
+    },
+    "http-method": {
+      "match": "(?<=\\broute\\s)(GET|POST|PUT|PATCH|DELETE)\\b",
+      "name": "keyword.other.http-method.lugh"
+    },
+    "adapter-call": {
+      "match": "\\b(fs|http|shell|db|mcp|llm)\\.([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "support.class.adapter.lugh" },
+        "2": { "name": "support.function.adapter.lugh" }
+      }
+    },
+    "function-call": {
+      "match": "\\b([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)?)(?=\\()",
+      "name": "entity.name.function.lugh"
+    },
+    "keyword": {
+      "patterns": [
+        {
+          "match": "\\b(goal|test|route|page|every|use|budget|policy|auth|token|env)\\b",
+          "name": "keyword.declaration.lugh"
+        },
+        {
+          "match": "\\b(allow|deny|ask|human|before)\\b",
+          "name": "keyword.other.policy.lugh"
+        },
+        {
+          "match": "\\b(let|when|otherwise|each|in|attempt|auto|together|consensus|min|refine|with|until|rounds|ensure|else|stop|remember|keep|recall|like|send|log|respond|expect)\\b",
+          "name": "keyword.control.lugh"
+        },
+        {
+          "match": "\\b(filter|map|sort|group|by|desc|where|to|pick|lowest|highest|from|pairs|attend|top|point|novelty|against|simplest|of|think|samples|count|as)\\b",
+          "name": "keyword.operator.word.lugh"
+        },
+        {
+          "match": "\\b(and|or|not)\\b",
+          "name": "keyword.operator.logical.lugh"
+        }
+      ]
+    },
+    "page-element": {
+      "match": "^\\s*(heading|text|link|table|list|stat|form|button|approvals|audit)\\b",
+      "captures": { "1": { "name": "support.type.page-element.lugh" } }
+    },
+    "operator": {
+      "match": "==|!=|<=|>=|->|[<>+\\-*/=]",
+      "name": "keyword.operator.lugh"
+    }
+  }
+}

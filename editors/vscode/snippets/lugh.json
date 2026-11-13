@@ -1,0 +1,36 @@
+{
+  "Agent": {
+    "prefix": "agent",
+    "body": [
+      "agent ${1:Name}",
+      "  use ${2:fs}",
+      "  budget time ${3:2m}, calls ${4:30}",
+      "  policy",
+      "    allow read",
+      "    ask human before write, send, submit, spend, execute",
+      "    deny delete",
+      "",
+      "  goal \"${5:What this agent achieves}\"",
+      "    $0"
+    ],
+    "description": "A new agent with a safe default policy"
+  },
+  "Goal": { "prefix": "goal", "body": ["goal \"${1:description}\"", "  $0"], "description": "A goal block" },
+  "Test": { "prefix": "test", "body": ["test \"${1:name}\"", "  expect ${2:condition}", "  $0"], "description": "A test block" },
+  "Route": {
+    "prefix": "route",
+    "body": ["route ${1|GET,POST,PUT,PATCH,DELETE|} \"${2:/api/path}\"", "  $0", "  respond ${3:value}"],
+    "description": "An HTTP route"
+  },
+  "Page": {
+    "prefix": "page",
+    "body": ["page \"${1:/}\" title \"${2:Title}\"", "  heading \"${3:Heading}\"", "  table from \"${4:/api/items}\"", "  $0"],
+    "description": "A web page"
+  },
+  "When / otherwise": { "prefix": "when", "body": ["when ${1:condition}", "  $2", "otherwise", "  $0"] },
+  "Attempt / otherwise": { "prefix": "attempt", "body": ["let ${1:result} = attempt", "  ${2:http.get \"https://api.example.com\" as json}", "otherwise", "  ${0:fs.read \"cache.json\" as json}"] },
+  "Each": { "prefix": "each", "body": ["each ${1:item} in ${2:items}", "  $0"] },
+  "Filter": { "prefix": "filter", "body": ["let ${1:matches} = filter ${2:x} in ${3:items} where ${0:x.price < 100}"] },
+  "Ask human": { "prefix": "ask", "body": ["ask human \"${1:Proceed?}\" -> ${2:ok}", "when ${2:ok}", "  $0"] },
+  "Every": { "prefix": "every", "body": ["every ${1:1h}", "  $0"], "description": "A scheduled job" }
+}

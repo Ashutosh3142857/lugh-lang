@@ -1,0 +1,56 @@
+{
+  "name": "lugh",
+  "displayName": "Lugh",
+  "description": "Language support for Lugh, the programming language for AI agents: highlighting, snippets, live error checking and run commands.",
+  "version": "0.1.0",
+  "publisher": "lugh-lang",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/Ashutosh3142857/lugh-lang" },
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Programming Languages", "Linters", "Snippets"],
+  "keywords": ["lugh", "agents", "ai", "mcp"],
+  "main": "./extension.js",
+  "activationEvents": ["onLanguage:lugh"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "lugh",
+        "aliases": ["Lugh", "lugh"],
+        "extensions": [".lugh"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      { "language": "lugh", "scopeName": "source.lugh", "path": "./syntaxes/lugh.tmLanguage.json" }
+    ],
+    "snippets": [
+      { "language": "lugh", "path": "./snippets/lugh.json" }
+    ],
+    "commands": [
+      { "command": "lugh.run", "title": "Lugh: Run File" },
+      { "command": "lugh.test", "title": "Lugh: Run Tests" },
+      { "command": "lugh.check", "title": "Lugh: Show What This Program Can Do" },
+      { "command": "lugh.serve", "title": "Lugh: Serve Routes and Pages" }
+    ],
+    "menus": {
+      "editor/title/run": [
+        { "command": "lugh.run", "when": "resourceLangId == lugh", "group": "navigation" }
+      ]
+    },
+    "configuration": {
+      "title": "Lugh",
+      "properties": {
+        "lugh.path": {
+          "type": "string",
+          "default": "lugh",
+          "description": "Path to the lugh executable (Lugh Core)."
+        },
+        "lugh.checkOnType": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check for errors while typing (otherwise only on open and save)."
+        }
+      }
+    }
+  }
+}

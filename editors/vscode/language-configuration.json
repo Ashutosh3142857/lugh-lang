@@ -1,0 +1,17 @@
+{
+  "comments": { "lineComment": "#" },
+  "brackets": [["{", "}"], ["[", "]"], ["(", ")"]],
+  "autoClosingPairs": [
+    { "open": "{", "close": "}" },
+    { "open": "[", "close": "]" },
+    { "open": "(", "close": ")" },
+    { "open": "\"", "close": "\"", "notIn": ["string", "comment"] }
+  ],
+  "surroundingPairs": [["{", "}"], ["[", "]"], ["(", ")"], ["\"", "\""]],
+  "indentationRules": {
+    "increaseIndentPattern": "^\\s*(agent|goal|test|route|page|every|policy|when|otherwise|each|attempt|let\\s+\\w+\\s*=\\s*(attempt|together|consensus))\\b.*$",
+    "decreaseIndentPattern": "^\\s*otherwise\\s*$"
+  },
+  "folding": { "offSide": true },
+  "wordPattern": "[A-Za-z_][A-Za-z0-9_]*"
+}
