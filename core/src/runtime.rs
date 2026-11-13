@@ -1081,6 +1081,10 @@ impl Runtime {
         Ok(v.clone())
     }
 
+    /// String interpolation, like f-strings and template literals: `{name.field}`
+    /// or any pure expression, `{count(items)}`, `{round(total / n, 2)}`.
+    /// Adapter calls are not allowed inside braces, so a message can never cause
+    /// an effect. Anything that isn't a valid expression is left as written.
     pub fn interp(&self, s: &str, env: &Env) -> String {
         if !s.contains('{') {
             return s.to_string();
@@ -1090,24 +1094,37 @@ impl Runtime {
         while let Some(open) = rest.find('{') {
             out.push_str(&rest[..open]);
             let after = &rest[open + 1..];
-            match after.find('}') {
-                Some(close)
-                    if after[..close]
-                        .chars()
-                        .all(|c| c.is_alphanumeric() || c == '_' || c == '.')
-                        && close > 0 =>
-                {
-                    match self.lookup(&after[..close], env) {
-                        Ok(v) => out.push_str(&txt(&v)),
-                        Err(_) => out.push_str(&rest[open..open + close + 2]),
-                    }
-                    rest = &after[close + 1..];
+            // Find the matching '}', allowing nested braces such as {json.text({a: 1})}.
+            let mut depth = 0usize;
+            let close = after.char_indices().find_map(|(i, c)| match c {
+                '{' => {
+                    depth += 1;
+                    None
                 }
-                _ => {
-                    out.push('{');
-                    rest = after;
+                '}' if depth == 0 => Some(i),
+                '}' => {
+                    depth -= 1;
+                    None
                 }
+                _ => None,
+            });
+            let Some(close) = close.filter(|c| *c > 0) else {
+                out.push('{');
+                rest = after;
+                continue;
+            };
+            let inner = &after[..close];
+            let simple = inner.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '.');
+            let value = if simple {
+                self.lookup(inner, env).ok()
+            } else {
+                crate::parser::parse_expr(inner, &[]).ok().and_then(|e| self.eval(&e, env).ok())
+            };
+            match value {
+                Some(v) => out.push_str(&txt(&v)),
+                None => out.push_str(&rest[open..open + close + 2]),
             }
+            rest = &after[close + 1..];
         }
         out.push_str(rest);
         out

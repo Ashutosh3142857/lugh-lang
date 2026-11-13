@@ -185,7 +185,7 @@ fn stdlib_suite_written_in_lugh() {
         .expect("run tests");
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(out.status.success(), "Lugh test suite failed:\n{text}");
-    assert!(text.contains("13 passed, 0 failed"), "{text}");
+    assert!(text.contains("14 passed, 0 failed"), "{text}");
 }
 
 #[test]

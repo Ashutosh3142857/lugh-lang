@@ -146,3 +146,11 @@ agent StdlibTests
     expect ("x" and "y") == "y"
     expect {a: {b: [10, 20]}}.a.b.1 == 20
     expect -3 + 5 == 2
+
+  test "string interpolation with expressions"
+    let items = [{price: 10}, {price: 32}]
+    expect "n={count(items)}" == "n=2"
+    expect "avg={round(avg(map i in items to i.price), 1)}" == "avg=21"
+    expect "{items.0.price} and {upper(\"ok\")}" == "10 and OK"
+    expect "literal {not an expression}" == "literal {not an expression}"
+    expect "{json.text({a: 1})}" == "{\"a\":1}"
