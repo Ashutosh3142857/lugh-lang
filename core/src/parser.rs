@@ -489,6 +489,7 @@ pub enum Rhs {
 pub enum Fallback {
     Stop(Expr),
     Ask(Expr),
+    Respond(u16, Expr),
     None,
 }
 
@@ -534,6 +535,22 @@ pub enum Stmt {
     },
     Log(Expr),
     Stop(Expr),
+    Respond {
+        status: u16,
+        body: Expr,
+    },
+}
+
+/// `respond 201 value` or `respond value` (status 200).
+fn parse_respond(s: &str, ad: &[String]) -> Result<(u16, Expr), String> {
+    let s = s.trim();
+    let (first, rest) = s.split_once(' ').unwrap_or((s, ""));
+    match first.parse::<u16>() {
+        Ok(code) if (100..600).contains(&code) && !rest.trim().is_empty() => {
+            Ok((code, parse_expr(rest, ad)?))
+        }
+        _ => Ok((200, parse_expr(s, ad)?)),
+    }
 }
 
 fn duration_secs(s: &str) -> Option<f64> {
@@ -655,7 +672,10 @@ fn parse_stmt(ln: &Line, next: Option<&Line>, ad: &[String]) -> Result<(Stmt, bo
                 Some((c, f)) => (c, f.trim()),
                 None => (rest, ""),
             };
-            let fb = if let Some(m) = fb.strip_prefix("stop") {
+            let fb = if let Some(m) = fb.strip_prefix("respond") {
+                let (code, e) = parse_respond(m, ad)?;
+                Fallback::Respond(code, e)
+            } else if let Some(m) = fb.strip_prefix("stop") {
                 Fallback::Stop(pe(m)?)
             } else if let Some(m) = fb.strip_prefix("ask human") {
                 Fallback::Ask(pe(m)?)
@@ -759,6 +779,10 @@ fn parse_stmt(ln: &Line, next: Option<&Line>, ad: &[String]) -> Result<(Stmt, bo
         }
         "log" => Ok((Stmt::Log(pe(rest)?), false)),
         "stop" => Ok((Stmt::Stop(pe(rest)?), false)),
+        "respond" => {
+            let (status, body) = parse_respond(rest, ad)?;
+            Ok((Stmt::Respond { status, body }, false))
+        }
         "otherwise" => Err("'otherwise' without attempt/when".into()),
         _ => Ok((Stmt::Do(Rhs::Expr(pe(t)?)), false)),
     }
@@ -793,6 +817,7 @@ pub fn calls_in_block(b: &Block, out: &mut Vec<(usize, String, String)>) {
             }
             Stmt::Send { target, msg, .. } => ex.extend([target, msg]),
             Stmt::Log(e) | Stmt::Stop(e) => ex.push(e),
+            Stmt::Respond { body, .. } => ex.push(body),
         }
         for e in ex {
             calls_in_expr(e, *no, out);

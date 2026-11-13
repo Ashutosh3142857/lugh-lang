@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// FxHash: a fast, non-cryptographic hasher. Variable names are program-controlled,
@@ -56,6 +56,72 @@ pub enum Flow {
     Fail(String),
     Denied(String),
     Budget(String),
+    /// `respond` inside a route: HTTP status and body.
+    Respond(u16, Value),
+}
+
+/// Human approvals waiting in the web inbox (server mode).
+#[derive(Default)]
+pub struct Approvals {
+    pub pending: Mutex<Vec<Pending>>,
+    pub changed: Condvar,
+    next_id: AtomicUsize,
+}
+
+#[derive(Clone)]
+pub struct Pending {
+    pub id: usize,
+    pub question: String,
+    pub created: f64,
+    pub decision: Option<bool>,
+}
+
+impl Approvals {
+    pub fn list(&self) -> Value {
+        let p = self.pending.lock().unwrap();
+        Value::Array(
+            p.iter()
+                .filter(|x| x.decision.is_none())
+                .map(|x| serde_json::json!({"id": x.id, "question": x.question, "created": x.created}))
+                .collect(),
+        )
+    }
+    pub fn decide(&self, id: usize, approve: bool) -> bool {
+        let mut p = self.pending.lock().unwrap();
+        match p.iter_mut().find(|x| x.id == id && x.decision.is_none()) {
+            Some(x) => {
+                x.decision = Some(approve);
+                self.changed.notify_all();
+                true
+            }
+            None => false,
+        }
+    }
+    /// Blocks until a person decides in the inbox, or the wait times out (counts as a no).
+    fn wait_for(&self, question: &str, timeout: std::time::Duration) -> bool {
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst) + 1;
+        let mut p = self.pending.lock().unwrap();
+        p.push(Pending {
+            id,
+            question: question.into(),
+            created: now(),
+            decision: None,
+        });
+        self.changed.notify_all();
+        let deadline = Instant::now() + timeout;
+        loop {
+            if let Some(d) = p.iter().find(|x| x.id == id).and_then(|x| x.decision) {
+                p.retain(|x| x.id != id);
+                return d;
+            }
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                p.retain(|x| x.id != id);
+                return false;
+            }
+            p = self.changed.wait_timeout(p, left).unwrap().0;
+        }
+    }
 }
 type R<T> = Result<T, Flow>;
 
@@ -82,10 +148,12 @@ pub struct Runtime {
     pub quiet: bool,
     calls: AtomicUsize,
     started: Instant,
-    memory: Mutex<Map<String, Value>>,
-    stats: Mutex<Map<String, Value>>,
-    audit: Mutex<File>,
-    human: Mutex<()>,
+    memory: Arc<Mutex<Map<String, Value>>>,
+    stats: Arc<Mutex<Map<String, Value>>>,
+    audit: Arc<Mutex<File>>,
+    human: Arc<Mutex<()>>,
+    /// Set in server mode: approvals go to the web inbox instead of the terminal.
+    pub inbox: Option<Arc<Approvals>>,
 }
 
 const MEMORY: &str = "lugh_memory.json";
@@ -127,16 +195,39 @@ impl Runtime {
             quiet: false,
             calls: AtomicUsize::new(0),
             started: Instant::now(),
-            memory: Mutex::new(memory),
-            stats: Mutex::new(load(STATS)),
-            audit: Mutex::new(
+            memory: Arc::new(Mutex::new(memory)),
+            stats: Arc::new(Mutex::new(load(STATS))),
+            audit: Arc::new(Mutex::new(
                 OpenOptions::new()
                     .create(true)
                     .append(true)
                     .open("lugh_audit.jsonl")?,
-            ),
-            human: Mutex::new(()),
+            )),
+            human: Arc::new(Mutex::new(())),
+            inbox: None,
         })
+    }
+
+    /// A per-request runtime: same policy, memory, stats, audit and inbox; fresh budget.
+    pub fn fork(&self) -> Runtime {
+        Runtime {
+            auto_yes: self.auto_yes,
+            agent: self.agent.clone(),
+            adapters: self.adapters.clone(),
+            allow: self.allow.clone(),
+            ask: self.ask.clone(),
+            deny: self.deny.clone(),
+            time_budget: self.time_budget,
+            call_budget: self.call_budget,
+            quiet: self.quiet,
+            calls: AtomicUsize::new(0),
+            started: Instant::now(),
+            memory: self.memory.clone(),
+            stats: self.stats.clone(),
+            audit: self.audit.clone(),
+            human: self.human.clone(),
+            inbox: self.inbox.clone(),
+        }
     }
 
     pub fn start_clock(&mut self) {
@@ -207,6 +298,12 @@ impl Runtime {
     }
 
     fn approves(&self, q: &str) -> bool {
+        if let (Some(inbox), false) = (&self.inbox, self.auto_yes) {
+            self.say("👤", &format!("waiting for approval in the inbox → {q}"));
+            let ok = inbox.wait_for(q, std::time::Duration::from_secs(300));
+            self.audit("human", serde_json::json!({"question": q, "answer": if ok { "yes" } else { "no" }, "via": "inbox"}));
+            return ok;
+        }
         let _one_at_a_time = self.human.lock().unwrap();
         if self.auto_yes {
             self.say("👤", &format!("auto-approved → {q}"));
@@ -272,15 +369,20 @@ impl Runtime {
             Rhs::Consensus(branches, need) => {
                 let vals = self.together(branches, env)?;
                 let vals = vals.as_array().cloned().unwrap_or_default();
-                let mut counts: Vec<(String, usize)> = Vec::new();
-                for v in &vals {
-                    let key = v.to_string();
-                    match counts.iter_mut().find(|(k, _)| *k == key) {
-                        Some(c) => c.1 += 1,
-                        None => counts.push((key, 1)),
+                // Group identical values by their canonical text; remember where each group starts.
+                let mut groups: Vec<(String, usize, usize)> = Vec::new(); // (key, votes, first index)
+                for (i, v) in vals.iter().enumerate() {
+                    let key = crate::info::canonical(v);
+                    match groups.iter_mut().find(|g| g.0 == key) {
+                        Some(g) => g.1 += 1,
+                        None => groups.push((key, 1, i)),
                     }
                 }
-                let (top, votes) = counts.into_iter().max_by_key(|c| c.1).unwrap_or_default();
+                let (votes, first) = groups
+                    .iter()
+                    .max_by_key(|g| g.1)
+                    .map(|g| (g.1, g.2))
+                    .unwrap_or((0, 0));
                 let need = need.unwrap_or(vals.len() / 2 + 1);
                 self.audit(
                     "consensus",
@@ -293,7 +395,7 @@ impl Runtime {
                     ));
                 }
                 self.say("🤝", &format!("consensus {votes}/{}", vals.len()));
-                Ok(vals.into_iter().find(|v| *v == top).unwrap_or(Value::Null))
+                Ok(vals.into_iter().nth(first).unwrap_or(Value::Null))
             }
         }
     }
@@ -357,6 +459,7 @@ impl Runtime {
                             Err(Flow::Stop("human chose to stop".into()))
                         }
                     }
+                    Fallback::Respond(status, m) => Err(Flow::Respond(*status, self.eval(m, env)?)),
                     Fallback::None => Err(Flow::Stop(format!("ensure failed: {src}"))),
                 }
             }
@@ -512,6 +615,10 @@ impl Runtime {
                 Ok(v)
             }
             Stmt::Stop(e) => Err(Flow::Stop(self.interp(&txt(&self.eval(e, env)?), env))),
+            Stmt::Respond { status, body } => {
+                let v = self.eval(body, env)?;
+                Err(Flow::Respond(*status, v))
+            }
         }
     }
 

@@ -6,11 +6,13 @@
 //!   lugh program.lugh --check    list every action the program can take and its policy
 //!   lugh program.lugh --eval     run and print a simplicity-weighted score
 //!   lugh program.lugh --quiet    print only results and errors
+//!   lugh program.lugh --serve 8080   serve its routes, pages and approvals inbox
 
 mod adapters;
 mod info;
 mod parser;
 mod runtime;
+mod web;
 
 use parser::{build_tree, calls_in_block, parse_block, parse_expr, walk, Block, Line};
 use runtime::{Flow, Runtime};
@@ -26,8 +28,16 @@ struct Goal {
     source: String,
 }
 
-fn setup(rt: &mut Runtime, top: &Line) -> Result<Vec<Goal>, String> {
+struct Program {
+    goals: Vec<Goal>,
+    routes: Vec<web::Route>,
+    pages: Vec<web::Page>,
+}
+
+fn setup(rt: &mut Runtime, top: &Line) -> Result<Program, String> {
     let mut goal_lines = Vec::new();
+    let mut route_lines = Vec::new();
+    let mut pages = Vec::new();
     for node in &top.children {
         let head = node.text.split_whitespace().next().unwrap_or("");
         let rest = node.text[head.len()..].trim();
@@ -99,9 +109,11 @@ fn setup(rt: &mut Runtime, top: &Line) -> Result<Vec<Goal>, String> {
                 }
             }
             "goal" => goal_lines.push(node),
+            "route" => route_lines.push(node),
+            "page" => pages.push(web::parse_page(node)?),
             other => {
                 return Err(format!(
-                    "line {}: expected use/budget/policy/goal, got '{other}'",
+                    "line {}: expected use/budget/policy/goal/route/page, got '{other}'",
                     node.no
                 ))
             }
@@ -121,10 +133,18 @@ fn setup(rt: &mut Runtime, top: &Line) -> Result<Vec<Goal>, String> {
             source: src.join("\n"),
         });
     }
-    if goals.is_empty() {
-        return Err("no goal defined".into());
+    let routes = route_lines
+        .into_iter()
+        .map(|r| web::parse_route(r, &rt.adapters))
+        .collect::<Result<Vec<_>, _>>()?;
+    if goals.is_empty() && routes.is_empty() && pages.is_empty() {
+        return Err("nothing to run: add a goal, route or page".into());
     }
-    Ok(goals)
+    Ok(Program {
+        goals,
+        routes,
+        pages,
+    })
 }
 
 fn main() -> ExitCode {
@@ -156,8 +176,8 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     };
     rt.agent = top.text[6..].trim().to_string();
-    let goals = match setup(&mut rt, top) {
-        Ok(g) => g,
+    let program = match setup(&mut rt, top) {
+        Ok(p) => p,
         Err(e) => {
             eprintln!("❌ {e}");
             return ExitCode::from(2);
@@ -173,10 +193,15 @@ fn main() -> ExitCode {
         rt.agent, rt.adapters, rt.time_budget, rt.call_budget, allow, deny
     );
 
+    let goals = &program.goals;
     if flag("--check") {
-        for g in &goals {
+        let bodies = goals
+            .iter()
+            .map(|g| &g.body)
+            .chain(program.routes.iter().map(|r| &r.body));
+        for body in bodies {
             let mut calls = Vec::new();
-            calls_in_block(&g.body, &mut calls);
+            calls_in_block(body, &mut calls);
             for (no, a, m) in calls {
                 let eff = adapters::effect_of(&a, &m).unwrap_or("unknown");
                 let rule = if rt.deny.contains(eff) {
@@ -196,9 +221,28 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
+    if let Some(i) = args.iter().position(|a| a == "--serve") {
+        let port = args
+            .get(i + 1)
+            .filter(|p| !p.starts_with("--"))
+            .map(String::as_str)
+            .unwrap_or("8080");
+        let host = if flag("--public") {
+            "0.0.0.0"
+        } else {
+            "127.0.0.1"
+        };
+        let server = web::Server::new(rt, program.routes, program.pages);
+        if let Err(e) = server.listen(&format!("{host}:{port}")) {
+            eprintln!("❌ cannot listen on {host}:{port}: {e}");
+            return ExitCode::from(1);
+        }
+        return ExitCode::SUCCESS;
+    }
+
     rt.start_clock();
     let mut results = Vec::new();
-    for g in &goals {
+    for g in goals {
         println!("\n🎯 goal: {}", g.text);
         rt.audit("goal_start", serde_json::json!({"goal": g.text}));
         let mut env = runtime::Env::default();
@@ -215,6 +259,11 @@ fn main() -> ExitCode {
                 );
                 println!("⏹  stopped: {m}");
                 0.5
+            }
+            Err(Flow::Respond(_, _)) => {
+                rt.audit("goal_done", serde_json::json!({"goal": g.text}));
+                println!("✅ goal complete");
+                1.0
             }
             Err(Flow::Fail(m)) | Err(Flow::Denied(m)) | Err(Flow::Budget(m)) => {
                 rt.audit(
