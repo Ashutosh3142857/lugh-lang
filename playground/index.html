@@ -453,7 +453,7 @@ $("share").onclick = async () => {
 let wasm = null;
 async function loadWasm() {
   try {
-    const res = await fetch("lugh.wasm");
+    const res = await fetch("lugh.wasm", { cache: "no-cache" });  // pick up new builds right away
     if (!res.ok) throw new Error(res.status);
     const { instance } = await WebAssembly.instantiate(await res.arrayBuffer(), { env: { lugh_now_ms: () => Date.now() } });
     wasm = instance.exports;
