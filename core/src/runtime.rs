@@ -1101,9 +1101,17 @@ impl Runtime {
                 let vals: Vec<Value> = args.iter().map(|a| self.eval(a, env)).collect::<R<_>>()?;
                 let shown: Vec<String> = vals
                     .iter()
-                    .map(|v| match v {
-                        Value::String(s) => s.chars().take(50).collect(),
-                        other => other.to_string().chars().take(50).collect(),
+                    .map(|v| {
+                        let full = match v {
+                            Value::String(s) => s.clone(),
+                            other => other.to_string(),
+                        };
+                        // Keep logs and approval prompts short, and show when something was cut.
+                        if full.chars().count() > 60 {
+                            full.chars().take(57).collect::<String>() + "…"
+                        } else {
+                            full
+                        }
                     })
                     .collect();
                 let desc = format!("{adapter}.{method} {}", shown.join(" "));
