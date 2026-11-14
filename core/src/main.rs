@@ -115,7 +115,9 @@ fn main() -> ExitCode {
         } else {
             "127.0.0.1"
         };
-        const PAGE: &str = include_str!("../../playground/index.html");
+        // A copy of playground/index.html (kept in sync by playground/sync_examples.py),
+        // so the crate builds on its own when published.
+        const PAGE: &str = include_str!("../assets/playground.html");
         if let Err(e) = web::serve_playground(&format!("{host}:{port}"), PAGE) {
             eprintln!("❌ cannot listen on {host}:{port}: {e}");
             return ExitCode::from(1);

@@ -71,6 +71,14 @@ fn the_policy_gate_runs_before_every_simulated_call() {
 fn every_example_runs_and_is_embedded_in_the_page() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../playground");
     let page = std::fs::read_to_string(root.join("index.html")).unwrap();
+    let served = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/playground.html"),
+    )
+    .unwrap();
+    assert!(
+        served == page,
+        "core/assets/playground.html is out of date, run python3 playground/sync_examples.py"
+    );
     let index: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(root.join("examples/index.json")).unwrap())
             .unwrap();

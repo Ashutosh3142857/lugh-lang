@@ -1,0 +1,29 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Ashutosh3142857/lugh",
+  "title": "Lugh",
+  "description": "Write, check and dry-run Lugh agent programs, with policy, budgets and approvals enforced.",
+  "repository": {
+    "url": "https://github.com/Ashutosh3142857/lugh-lang",
+    "source": "github",
+    "subfolder": "npm"
+  },
+  "websiteUrl": "https://ashutosh3142857.github.io/lugh-lang/",
+  "version": "0.7.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "lugh-lang",
+      "version": "0.7.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
+    }
+  ]
+}

@@ -69,6 +69,13 @@ jobs:
           (node playground/run.mjs playground/examples/refund_desk.lugh || true) | grep -q "denied by policy"
           node playground/run.mjs playground/examples/web_app.lugh --test | grep -q "1 passed, 0 failed"
           node playground/run.mjs --sandbox | grep -q "api.example.com"
+      - name: npm package and MCP server
+        run: |
+          cp playground/lugh.wasm npm/lugh.wasm
+          node npm/test/mcp.test.mjs
+          node npm/test/versions.test.mjs
+          (node npm/bin/lugh-lang.mjs run playground/examples/notes_agent.lugh || true) | grep -q "denied by policy"
+          cd npm && npm pack --dry-run
       - uses: actions/upload-artifact@v4
         with:
           name: playground

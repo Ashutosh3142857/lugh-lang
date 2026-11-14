@@ -2,10 +2,16 @@
 name = "lugh"
 version = "0.7.0"
 edition = "2021"
-description = "Native runtime for the Lugh agent programming language"
+description = "Lugh Core: runtime and CLI for Lugh, a programming language for AI agents with policy, budgets and human approval in the syntax"
 license = "MIT"
 authors = ["Ashutosh Pandey"]
 repository = "https://github.com/Ashutosh3142857/lugh-lang"
+homepage = "https://ashutosh3142857.github.io/lugh-lang/"
+documentation = "https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/SPEC.md"
+readme = "README.md"
+keywords = ["ai-agents", "mcp", "language", "guardrails", "llm"]
+categories = ["command-line-utilities", "compilers", "development-tools"]
+exclude = ["target/", "tests/"]
 
 [lib]
 name = "lugh_core"

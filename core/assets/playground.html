@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lugh Playground</title>
+<meta name="description" content="Try Lugh, the programming language for AI agents, in your browser: write agents that read files, call APIs and MCP servers in a simulated world, with policy, approvals and budgets enforced.">
+<style>
+:root{--bg:#f6f5f1;--panel:#fff;--ink:#1c1c1a;--muted:#6b6a64;--line:#e3e1da;--accent:#2f5d50;--ok:#2f7a4a;--bad:#a33a2c;--warn:#8a6514;--code:#fbfaf7}
+@media (prefers-color-scheme:dark){:root{--bg:#121211;--panel:#1b1b19;--ink:#ecebe6;--muted:#9a9993;--line:#2c2c29;--accent:#7fb8a6;--ok:#6cc08b;--bad:#e0806f;--warn:#e2b45c;--code:#161614}}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+header h1{font-size:16px;margin:0}header .tag{color:var(--muted)}
+.spacer{flex:1}
+select,button{font:inherit;border-radius:6px;padding:6px 12px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+button{cursor:pointer}button.primary{background:var(--accent);border-color:var(--accent);color:var(--panel);font-weight:600}
+button:disabled{opacity:.5;cursor:default}
+#engine{font-size:12px;color:var(--muted)}
+main{flex:1;display:grid;grid-template-columns:1fr 1fr;min-height:0}
+@media (max-width:800px){main{grid-template-columns:1fr;grid-template-rows:1fr 1fr}}
+section{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
+section h2{font-size:12px;font-weight:600;color:var(--muted);margin:0;padding:8px 16px;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.04em}
+textarea,pre{flex:1;margin:0;padding:16px;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--code);color:var(--ink);border:0;resize:none;outline:none;overflow:auto;tab-size:2;white-space:pre}
+pre{white-space:pre-wrap}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.dim{color:var(--muted)}.ask{color:var(--warn)}.head{font-weight:600;margin-top:.4em}
+label.inline{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px}
+#toast{position:fixed;bottom:48px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--panel);padding:6px 14px;border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.show{opacity:1}
+footer{padding:8px 20px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);background:var(--panel)}
+footer a{color:inherit}
+kbd{font:11px ui-monospace,monospace;border:1px solid var(--line);border-radius:4px;padding:1px 4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Lugh Playground</h1>
+  <span class="tag">a programming language for AI agents</span>
+  <span class="spacer"></span>
+  <select id="example" aria-label="Example program"></select>
+  <label class="inline" title="How the playground answers when the program asks a human">When asked
+    <select id="answer" aria-label="Answer to approval requests"><option value="yes">Approve</option><option value="no">Decline</option></select></label>
+  <button id="world" title="What the simulated adapters can see">Sandbox</button>
+  <button id="share" title="Copy a link to this program">Share</button>
+  <button id="check" title="Compile only">Check</button>
+  <button id="test" title="Run test blocks">Test</button>
+  <button id="run" class="primary" title="Run goals (Ctrl+Enter)">Run</button>
+</header>
+<main>
+  <section><h2>Program</h2><textarea id="code" spellcheck="false" aria-label="Lugh program"></textarea></section>
+  <section><h2>Output <span id="engine"></span></h2><pre id="out" aria-live="polite"></pre></section>
+</main>
+<footer>
+  Adapters (<code>fs</code>, <code>http</code>, <code>mcp</code>, <code>shell</code>) act on a simulated world in your browser: nothing real is touched, but policy, approvals and budgets work exactly as they do when installed.
+  <a href="https://github.com/Ashutosh3142857/lugh-lang">GitHub</a> · <a href="https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/SPEC.md">Language</a> · <a href="https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/STDLIB.md">Library</a> · <a href="https://github.com/Ashutosh3142857/lugh-lang/blob/main/playground/README.md">For agents</a> ·
+  <kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs.
+</footer>
+<div id="toast" role="status"></div>
+<!--EXAMPLES-->
+<script type="text/lugh" id="notes_agent" data-group="Agents and policy" data-name="Notes agent over MCP">
+# An agent working through an MCP server. Each tool's effect comes from its MCP
+# annotations: list_notes is read-only, add_note is a submit, delete_note is
+# destructive. The policy decides which of those may run.
+# Try: switch "When asked" to "Decline", or change `deny delete` to `allow delete`.
+
+agent NotesAgent
+  use mcp
+  policy
+    allow read
+    ask human before submit
+    deny delete
+
+  goal "Capture the visa checklist as notes"
+    let tools = mcp.tools "notes"
+    let names = join(map t in tools to t.name, ", ")
+    log "Server offers: {names}"
+    mcp.call "notes" "add_note" {title: "Biometrics", body: "Book the appointment"}
+    mcp.call "notes" "add_note" {title: "Insurance", body: "Buy travel cover"}
+    let notes = mcp.call "notes" "list_notes"
+    log "Notes now: {map n in notes to n.title}"
+    ensure count(notes) >= 4 else stop "Notes were not saved"
+
+  goal "Deleting is blocked by policy"
+    mcp.call "notes" "delete_note" {title: "Insurance"}
+</script>
+<script type="text/lugh" id="refund_desk" data-group="Agents and policy" data-name="Refund desk with limits">
+# Refund damaged and late orders, within limits the code enforces.
+# Reads run on their own, every refund asks you first, and a single
+# destructive call (void_all) is never allowed, even if a bug calls it.
+
+agent RefundDesk
+  use fs, mcp
+  budget time 30s, calls 12
+  policy
+    allow read
+    ask human before submit
+    deny delete
+
+  goal "Refund damaged and late orders"
+    let config = fs.read "config.json" as json
+    let orders = csv.parse(fs.read "orders.csv")
+    let eligible = filter o in orders where o.status == "damaged" or o.status == "late"
+    log "{count(eligible)} of {count(orders)} orders are eligible"
+
+    # Damaged items get a full refund, late ones 20%. Anything over the limit goes to a person.
+    each o in eligible
+      let amount = o.amount
+      when o.status == "late"
+        let amount = round(o.amount * 0.2)
+      when amount > config.refund_limit
+        log "Skipped {o.order_id} ({o.customer}): INR {amount} is over the limit, escalate to a manager"
+      otherwise
+        mcp.call "payments" "refund" {order_id: o.order_id, amount: amount}
+
+    let done = mcp.call "payments" "list_refunds"
+    log "Refunded {count(done)} order(s), INR {sum(map r in done to r.amount)} in total"
+    let balance = mcp.call "payments" "get_balance"
+    log "Balance now INR {balance.balance}"
+
+  goal "A buggy line tries to void everything"
+    mcp.call "payments" "void_all" {}
+</script>
+<script type="text/lugh" id="issue_triage" data-group="Agents and policy" data-name="GitHub issue triage">
+# Triage GitHub issues: rank by relevance, comment on the crashes, open a
+# tracking issue, and show that `attempt` cannot swallow a policy denial.
+
+agent IssueTriage
+  use mcp
+  budget calls 15
+  policy
+    allow read
+    ask human before submit
+    deny delete
+
+  goal "Find crash reports and open a tracking issue"
+    let open = mcp.call "github" "list_issues" {}
+    log "{count(open)} open issues"
+    let crashes = attend to open by "app crash on startup error" top 2
+    each i in crashes
+      log "Crash: #{i.number} {i.title}"
+      mcp.call "github" "comment" {number: i.number, body: "Linked to the crash tracking issue."}
+    let titles = join(map i in crashes to "#{i.number}", ", ")
+    let tracking = mcp.call "github" "create_issue" {title: "Track crashes: {titles}", body: "Collected by IssueTriage."}
+    log "Opened #{tracking.number}: {tracking.title}"
+
+  goal "Clean up docs issues"
+    let docs = mcp.call "github" "list_issues" {label: "docs"}
+    each i in docs
+      mcp.call "github" "close_issue" {number: i.number}
+    log "Closed {count(docs)} docs issue(s)"
+
+  goal "Policy denials always propagate"
+    # A fallback can't route around the policy: this goal fails, by design.
+    let r = attempt
+      mcp.call "github" "delete_repo" {}
+    otherwise
+      log "never printed"
+</script>
+<script type="text/lugh" id="inbox_assistant" data-group="Agents and policy" data-name="Inbox assistant">
+# Read the inbox, find what matters, quote the deadline from the source
+# (never invented), and draft a reply that only goes out with your yes.
+
+agent InboxAssistant
+  use mcp
+  policy
+    allow read
+    ask human before submit
+    deny delete
+
+  goal "Handle the overdue invoice"
+    let inbox = mcp.call "mail" "list_messages" {}
+    let urgent = first(attend to inbox by "overdue invoice payment due" top 1)
+    log "Most urgent: {urgent.subject} (from {urgent.from})"
+    let deadline = point to "payment due by date" in urgent.body
+    ensure deadline else stop "No deadline in the source"
+    let amount = text.find(urgent.body, "INR ([0-9,]+)")
+    log "Quoted from the email: {deadline} Amount: INR {amount}"
+    let days = time.diff("2026-11-14", "2026-11-30", "days")
+    mcp.call "mail" "send_email" {to: urgent.from, subject: "Re: {urgent.subject}", body: "Thanks, confirming payment of INR {amount} before the deadline ({days} days from today)."}
+    remember "invoice_INV-2041" = {deadline: deadline, amount: amount}
+    let saved = recall "invoice_INV-2041"
+    log "Remembered: {saved.deadline}"
+
+  goal "Someone asks it to clear the inbox"
+    mcp.call "mail" "delete_all" {}
+</script>
+<script type="text/lugh" id="fare_watch" data-group="Agents and policy" data-name="Fallbacks and consensus">
+# Resilience and agreement: fall back when an API fails, accept a fare only
+# when independent sources agree, and convert it with live rates.
+
+agent FareWatch
+  use http, fs
+  budget time 20s, calls 12
+  policy
+    allow read
+    deny delete
+
+  goal "Get fares, even when the first API is down"
+    let fares = attempt
+      http.get "https://api.example.com/flaky" as json
+    otherwise
+      http.get "https://api.example.com/fares?to=DUB&max=50000" as json
+    log "Got {count(fares)} fares under INR 50,000"
+
+  goal "Accept a fare only when sources agree"
+    let fare = consensus
+      pick lowest price from http.get "https://api.example.com/fares?to=DUB" as json
+      pick lowest price from fs.read "fares.json" as json
+      pick lowest price from filter f in (fs.read "fares.json" as json) where f.stops <= 2
+    log "Agreed: {fare.airline} on {fare.depart} at INR {fare.price}"
+    let fx = http.get "https://api.example.com/rates" as json
+    log "That is about EUR {round(fare.price * fx.rates.EUR, 2)} or USD {round(fare.price * fx.rates.USD, 2)}"
+    let wx = http.get "https://api.example.com/weather/dublin" as json
+    log "Dublin today: {wx.temp_c}°C, {wx.sky}"
+    let days = time.diff("2026-11-14", fare.depart, "days")
+    log "Departure in {days} days, a {time.weekday(fare.depart)}"
+</script>
+<script type="text/lugh" id="budget_guard" data-group="Agents and policy" data-name="Budgets stop runaway loops">
+# Budgets are part of the program. This agent may make at most 5 calls,
+# so a runaway loop is stopped by the runtime, not by luck.
+
+agent BudgetGuard
+  use http
+  budget time 10s, calls 5
+  policy
+    allow read
+
+  goal "Poll the weather for ten cities"
+    let cities = ["dublin", "delhi", "dubai", "london", "paris", "rome", "oslo", "lima", "tokyo", "cairo"]
+    each c in cities
+      let w = http.get "https://api.example.com/weather/{c}" as json
+      log "{c}: {w.temp_c}°C, {w.sky}"
+</script>
+<script type="text/lugh" id="sales_report" data-group="Data" data-name="CSV to Markdown report">
+# A data pipeline: parse CSV, validate rows, aggregate, write a Markdown report
+# (a `write` effect the policy allows) and read it back.
+
+agent SalesReport
+  use fs
+  policy
+    allow read, write
+    deny delete
+
+  goal "Build the November order report"
+    let rows = csv.parse(fs.read "orders.csv")
+    let spec = {order_id: "text 6..6", amount: "number 1..100000", email: "email"}
+    let bad = filter r in rows where not schema.valid(r, spec)
+    ensure count(bad) == 0 else stop "{count(bad)} invalid rows"
+
+    let amounts = map r in rows to r.amount
+    let by_status = list.count_by(rows, "status")
+    let biggest = first(sort rows by amount desc)
+    let lines = map s in keys(by_status) to "| {s} | {list.get(by_status, s)} |"
+    let head = "# Orders, November 2026\n\n{{n}} orders, INR {{total}} in total. Median order INR {{median}}, 90th percentile INR {{p90}}.\nLargest: {{big}}.\n\n| Status | Orders |\n| --- | --- |\n{{table}}"
+    let report = template.render(head, {n: count(rows), total: sum(amounts), median: stats.median(amounts), p90: round(stats.percentile(amounts, 90)), big: "{biggest.order_id} by {biggest.customer}, INR {biggest.amount}", table: join(lines, "\n")})
+    fs.write "report.md" report
+    let back = fs.read "report.md"
+    log back
+    let files = fs.list "."
+    let listing = join(files, ", ")
+    log "Files now: {listing}"
+</script>
+<script type="text/lugh" id="reasoning" data-group="Data" data-name="Matching and grounding">
+# Lugh's reasoning primitives, all deterministic and offline: relevance,
+# grounded extraction, relational matching, simplicity and novelty.
+
+agent Reconciler
+  goal "Match invoices to payments"
+    let invoices = [
+      {id: "INV-1", client: "Northwind", amount: 18400},
+      {id: "INV-2", client: "Contoso", amount: 9200},
+      {id: "INV-3", client: "Fabrikam", amount: 5100},
+      {id: "INV-4", client: "Northwind", amount: 7300}
+    ]
+    let payments = [
+      {ref: "TX-88", payer: "Northwind", amount: 18400},
+      {ref: "TX-89", payer: "Fabrikam", amount: 5100},
+      {ref: "TX-90", payer: "Contoso", amount: 9000}
+    ]
+    # every invoice/payment pair where client and amount both match
+    let paid = pairs i from invoices, p from payments where i.client == p.payer and i.amount == p.amount
+    each m in paid
+      log "Paid: {m.i.id} by {m.p.ref}"
+    let paid_ids = map m in paid to m.i.id
+    let open = filter i in invoices where not contains(paid_ids, i.id)
+    log "Still open: {map i in open to i.id}, INR {sum(map i in open to i.amount)}"
+    let by_client = group open by client
+    log "Open by client: {keys(by_client)}"
+
+  goal "Ground every claim in the source"
+    let notes = [
+      "Contoso paid 9,000 of 9,200; the 200 shortfall is a bank fee.",
+      "Northwind asked to split INV-4 into two payments next month.",
+      "Office plants need watering on Fridays."
+    ]
+    let relevant = attend to notes by "Contoso shortfall bank fee" top 1
+    let reason = point to "shortfall reason" in relevant.0
+    log "Why Contoso is short, quoted: {reason}"
+
+  goal "Prefer the simplest plan, notice what is new"
+    let plans = [
+      "Write off the 200 bank fee",
+      "Open a dispute, wait for the bank, re-invoice Contoso for 200, then reconcile again next quarter"
+    ]
+    let plan = simplest of plans
+    log "Plan: {plan}"
+    let repeat = novelty "Write off the 200 bank fee" against plans
+    let fresh = novelty "Northwind wants a 30 day extension" against plans
+    log "Novelty of a repeat: {round(repeat, 2)}, of something new: {round(fresh, 2)}"
+</script>
+<script type="text/lugh" id="grounded" data-group="Data" data-name="Grounded extraction">
+agent Inbox
+  goal "Find the urgent email and pull out its deadline"
+    let inbox = [
+      {subject: "Lunch on Friday?", body: "Fancy tacos?"},
+      {subject: "Invoice INV-2041 overdue", body: "Invoice INV-2041 is overdue. Payment is due by 30 November 2026. Please confirm."},
+      {subject: "Standup moved", body: "Now at 10:30."}
+    ]
+    let urgent = first(attend to inbox by "overdue invoice payment" top 1)
+    log "Most relevant: {urgent.subject}"
+    let deadline = point to "payment due by date" in urgent.body
+    log "Deadline, quoted from the source: {deadline}"
+</script>
+<script type="text/lugh" id="stats_dates" data-group="Data" data-name="Statistics and dates">
+agent Analyst
+  goal "Summarise a month of sales"
+    let sales = [1200, 950, 1430, 2100, 870, 1990, 1600]
+    log "Mean {round(stats.mean(sales), 1)}, median {stats.median(sales)}"
+    log "Std dev {round(stats.stdev(sales), 1)}, 90th percentile {stats.percentile(sales, 90)}"
+    let start = "2026-11-14"
+    let due = time.add(start, 10, "days")
+    log "Report due {due}, a {time.weekday(due)}"
+    let week = time.start_of(start, "week")
+    log "Week began {week}"
+</script>
+<script type="text/lugh" id="collections" data-group="Language" data-name="Collections and approval">
+agent FareFinder
+  goal "Find the best fare under budget"
+    let fares = [
+      {airline: "Emirates", price: 48200, stops: 1},
+      {airline: "Etihad", price: 41800, stops: 1},
+      {airline: "Qatar Airways", price: 43950, stops: 1},
+      {airline: "IndiGo", price: 39900, stops: 2}
+    ]
+    let direct_enough = filter f in fares where f.stops <= 1
+    let best = first(sort direct_enough by price)
+    ensure best.price < 45000 else stop "Nothing under budget"
+    log "Best: {best.airline} at INR {best.price}"
+    log "Average fare: {round(avg(map f in fares to f.price), 0)}"
+    ask human "Book {best.airline}?" -> ok
+    when ok
+      log "Booked {best.airline}"
+    otherwise
+      log "Not booked: you said no"
+</script>
+<script type="text/lugh" id="validation" data-group="Language" data-name="Validation and templates">
+agent Intake
+  goal "Validate a signup and render a welcome"
+    let spec = {name: "text 2..40", email: "email", age: "int 18..120"}
+    let good = {name: "Ash", email: "ash@example.com", age: 33}
+    let bad = {name: "A", email: "nope", age: 12}
+    log "good: {schema.valid(good, spec)}"
+    each problem in schema.check(bad, spec)
+      log "bad: {problem}"
+    log template.render("Welcome, {{name}}! We'll write to {{email}}.", good)
+    log "id {uuid()}"
+</script>
+<script type="text/lugh" id="tests" data-group="Language" data-name="Tests">
+agent Checks
+  test "maths"
+    expect sum([1, 2, 3]) == 6
+    expect round(math.sqrt(2), 3) == 1.414
+  test "text"
+    expect upper("lugh") == "LUGH"
+    expect text.find("INV-2041 due", "INV-([0-9]+)") == "2041"
+  test "this one fails on purpose"
+    expect 1 + 1 == 3
+</script>
+<script type="text/lugh" id="web_app" data-group="Web" data-name="Routes and pages">
+# Routes (backend) and pages (frontend) in the same language. In the browser
+# this compiles and runs its tests; serve it locally with: lugh web_app.lugh --serve 8080
+
+agent FareDesk
+  use fs
+  policy
+    allow read
+    ask human before submit
+    deny delete
+
+  route GET "/api/fares"
+    respond fs.read "fares.json" as json
+
+  route GET "/api/best"
+    let fares = fs.read "fares.json" as json
+    respond pick lowest price from fares
+
+  route POST "/api/book"
+    ensure request.body.airline else respond 400 "airline is required"
+    let ok = ask human "Book {request.body.airline} at INR {request.body.price}?"
+    ensure ok else respond 403 "Not approved"
+    respond {booked: request.body.airline}
+
+  page "/" title "Fare desk"
+    heading "Delhi to Dublin"
+    stat from "/api/best" field price label "Lowest fare (INR)"
+    table from "/api/fares" columns airline, depart, price, stops
+    form to "/api/book" fields airline, price submit "Request booking"
+    approvals
+
+  test "the cheapest fare is under budget"
+    let fares = fs.read "fares.json" as json
+    let best = pick lowest price from fares
+    expect best.price < 45000
+    expect best.airline == "IndiGo"
+</script>
+<!--/EXAMPLES-->
+<script>
+const EXAMPLES = {}, GROUPS = {};
+for (const s of document.querySelectorAll('script[type="text/lugh"]')) {
+  EXAMPLES[s.id] = { name: s.dataset.name, src: s.textContent.replace(/^\n/, "") };
+  (GROUPS[s.dataset.group] ||= []).push(s.id);
+}
+const $ = id => document.getElementById(id);
+const code = $("code"), out = $("out"), engine = $("engine"), pick = $("example");
+for (const [group, ids] of Object.entries(GROUPS)) {
+  const g = document.createElement("optgroup");
+  g.label = group;
+  for (const id of ids) g.appendChild(new Option(EXAMPLES[id].name, id));
+  pick.appendChild(g);
+}
+// Links: #example=<id>, #code=<base64url program>, or (older links) the raw program.
+// Query: ?run=1 | ?test=1 | ?check=1 runs on load; ?decline=1 answers approvals with no.
+const b64 = { enc: s => btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""),
+              dec: s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0))) };
+function loadFromUrl() {
+  const h = location.hash.slice(1), p = new URLSearchParams(location.search);
+  if (p.get("decline") === "1") $("answer").value = "no";
+  if (h.startsWith("example=") && EXAMPLES[h.slice(8)]) { pick.value = h.slice(8); code.value = EXAMPLES[pick.value].src; }
+  else if (h.startsWith("code=")) { try { code.value = b64.dec(h.slice(5)); pick.value = ""; } catch { code.value = "# This link's program could not be decoded."; } }
+  else if (decodeURIComponent(h).startsWith("agent ")) { code.value = decodeURIComponent(h); pick.value = ""; }
+  else { pick.value = "notes_agent"; code.value = EXAMPLES.notes_agent.src; }
+  return p.get("run") ? "run" : p.get("test") ? "test" : p.get("check") ? "check" : null;
+}
+pick.onchange = e => { code.value = EXAMPLES[e.target.value].src; out.textContent = ""; history.replaceState(null, "", "#example=" + e.target.value); };
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1800); }
+$("share").onclick = async () => {
+  const same = pick.value && EXAMPLES[pick.value] && EXAMPLES[pick.value].src === code.value;
+  const url = location.origin + location.pathname + "?run=1" + ($("answer").value === "no" ? "&decline=1" : "") + "#" + (same ? "example=" + pick.value : "code=" + b64.enc(code.value));
+  history.replaceState(null, "", url.slice(url.indexOf("?")));
+  try { await navigator.clipboard.writeText(url); toast("Link copied"); } catch { prompt("Copy this link", url); }
+};
+
+let wasm = null;
+async function loadWasm() {
+  try {
+    const res = await fetch("lugh.wasm", { cache: "no-cache" });  // pick up new builds right away
+    if (!res.ok) throw new Error(res.status);
+    const { instance } = await WebAssembly.instantiate(await res.arrayBuffer(), { env: { lugh_now_ms: () => Date.now() } });
+    wasm = instance.exports;
+    engine.textContent = "· running in your browser";
+  } catch {
+    engine.textContent = "· running on the server";
+  }
+}
+function runWasm(src, mode) {
+  const bytes = new TextEncoder().encode(src);
+  const ptr = wasm.lugh_alloc(bytes.length);
+  new Uint8Array(wasm.memory.buffer, ptr, bytes.length).set(bytes);
+  const n = wasm.lugh_run(ptr, bytes.length, { run: 0, test: 1, check: 2, world: 3 }[mode] + ($("answer").value === "no" ? 4 : 0));
+  wasm.lugh_free(ptr, bytes.length);
+  return new TextDecoder().decode(new Uint8Array(wasm.memory.buffer, wasm.lugh_output_ptr(), n).slice());
+}
+async function runServer(src, mode) {
+  const res = await fetch("api/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: src, mode, decline: $("answer").value === "no" }) });
+  if (!res.ok) return "❌ The playground server is not available (" + res.status + ").";
+  return (await res.json()).output;
+}
+function paint(text) {
+  out.innerHTML = "";
+  for (const line of text.split("\n")) {
+    const div = document.createElement("div");
+    div.textContent = line || " ";
+    if (/^\s*(✅|✓|✔)/.test(line) || /\b0 failed\b/.test(line)) div.className = "ok";
+    else if (/^\s*(❌|✗|⏹|!)/.test(line) || /^\s{4,}\S/.test(line) && /expected|denied|budget/.test(line)) div.className = "bad";
+    else if (/^\s*👤/.test(line)) div.className = "ask";
+    else if (/^📋/.test(line)) div.className = "head";
+    out.appendChild(div);
+  }
+}
+async function go(mode) {
+  for (const b of ["run", "test", "check", "world"]) $(b).disabled = true;
+  out.textContent = "…";
+  const started = performance.now();
+  try {
+    const text = wasm ? runWasm(code.value, mode) : await runServer(code.value, mode);
+    paint(mode === "world" ? text : text + `\n(${Math.round(performance.now() - started)} ms)`);
+  } catch (e) {
+    paint("❌ " + e);
+  } finally {
+    for (const b of ["run", "test", "check", "world"]) $(b).disabled = false;
+  }
+}
+$("run").onclick = () => go("run");
+$("test").onclick = () => go("test");
+$("check").onclick = () => go("check");
+$("world").onclick = () => go("world");
+code.addEventListener("keydown", e => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); go("run"); }
+  if (e.key === "Tab") { e.preventDefault(); const s = code.selectionStart; code.setRangeText("  ", s, code.selectionEnd, "end"); }
+});
+const autorun = loadFromUrl();
+loadWasm().then(() => autorun && go(autorun));
+</script>
+</body>
+</html>
