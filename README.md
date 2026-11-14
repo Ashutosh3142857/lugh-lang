@@ -1,5 +1,9 @@
 # Lugh
 
+[![CI](https://github.com/Ashutosh3142857/lugh-lang/actions/workflows/ci.yml/badge.svg)](https://github.com/Ashutosh3142857/lugh-lang/actions/workflows/ci.yml)
+[![Playground](https://img.shields.io/badge/try-playground-2f5d50)](https://ashutosh3142857.github.io/lugh-lang/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 **A programming language for AI agents that work through the infrastructure that already exists** — APIs, websites, shells, files, SaaS apps and desktop software.
 
 Lugh is named for the Irish god *Samildánach*, "skilled in all the arts". A Lugh program declares what an agent may touch, how much it may spend, and when a human must approve — and the runtime enforces all of it on every single action.
