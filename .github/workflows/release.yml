@@ -2,7 +2,7 @@ name: Release
 
 # Push a tag like v0.7.0, or run this workflow by hand, after setting the same version in
 # core/Cargo.toml, npm/package.json and npm/server.json. It publishes Lugh Core to crates.io, lugh-lang to npm, and the MCP server to the
-# official MCP Registry. No secrets: npm and crates.io use Trusted Publishing and the
+# official MCP Registry. No secrets: npm (staged, approved by a maintainer) and crates.io use Trusted Publishing and the
 # MCP Registry uses GitHub OIDC, all tied to this repository and this workflow file.
 on:
   push:
@@ -42,16 +42,24 @@ jobs:
 
       # Each step skips a version that is already published, so a failed
       # release can simply be re-run.
-      - name: Publish lugh-lang to npm
+      # npm uses staged publishing: this step uploads the version, and it goes live
+      # only after a maintainer approves it at npmjs.com (lugh-lang > Staged Packages).
+      # Run this workflow again after approving to publish it to the MCP Registry.
+      - name: Stage lugh-lang on npm
+        id: npm
         working-directory: npm
         run: |
           V=$(node -p "require('./package.json').version")
-          if npm view "lugh-lang@$V" version >/dev/null 2>&1; then echo "lugh-lang $V is already on npm"; exit 0; fi
-          npm install -g npm@latest   # Trusted Publishing needs npm 11.5 or later
-          npm publish --access public
+          if npm view "lugh-lang@$V" version >/dev/null 2>&1; then
+            echo "lugh-lang $V is live on npm"; echo "live=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          npm install -g npm@latest   # Trusted Publishing and staging need a current npm
+          npm stage publish --access public || echo "::warning::lugh-lang $V may already be staged; approve it at npmjs.com"
+          echo "::notice::lugh-lang $V is staged. Approve it on npmjs.com, then re-run this workflow for the MCP Registry."
 
       - name: Publish to the MCP Registry
-        # The registry checks that the npm package exists, so this follows npm.
+        # The registry checks that the npm version is live, so this waits for approval.
+        if: steps.npm.outputs.live == 'true'
         working-directory: npm
         run: |
           NAME=$(node -p "require('./server.json').name"); V=$(node -p "require('./server.json').version")
