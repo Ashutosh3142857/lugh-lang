@@ -12,6 +12,7 @@ pub mod parser;
 pub mod playground;
 pub mod program;
 pub mod runtime;
+pub mod sandbox;
 pub mod stdlib;
 pub mod web;
 

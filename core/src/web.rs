@@ -760,7 +760,7 @@ $("[data-lugh=form]").forEach(form);$("[data-lugh=button]").forEach(button);refr
 // ───────────────────────────── playground server ─────────────────────────────
 
 /// `lugh playground`: serves the playground page and runs programs in the sandbox
-/// (no adapters, no disk, 10-second budget). Serves `playground/lugh.wasm` too when
+/// (adapters act on a simulated world, no disk, 10-second budget). Serves `playground/lugh.wasm` too when
 /// it exists, in which case the page runs programs in the browser instead.
 pub fn serve_playground(addr: &str, html: &'static str) -> std::io::Result<()> {
     let listener = TcpListener::bind(addr)?;
@@ -798,9 +798,14 @@ pub fn serve_playground(addr: &str, html: &'static str) -> std::io::Result<()> {
                         .and_then(Value::as_str)
                         .unwrap_or("run")
                         .to_string();
+                    let decline = req
+                        .body
+                        .get("decline")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
                     let (tx, rx) = std::sync::mpsc::channel();
                     std::thread::spawn(move || {
-                        let _ = tx.send(crate::playground::run(&code, &mode));
+                        let _ = tx.send(crate::playground::run_with(&code, &mode, decline));
                     });
                     let output = rx
                         .recv_timeout(Duration::from_secs(15))

@@ -39,9 +39,14 @@ agent FlightScout
 - **In VS Code:** the [extension](editors/vscode) adds highlighting, snippets,
   live error checking and run commands.
 
-The playground is sandboxed: adapters that touch files, networks and services
-are disabled, nothing is written to disk, and every run has a 10-second budget
-that also stops runaway computation.
+In the playground, adapters act on a simulated world: a few files, an HTTP API
+and four MCP servers (notes, GitHub, payments, mail), created fresh for every
+run. Nothing real is touched, but every call still passes the policy gate, so
+`allow`, `ask` and `deny` behave exactly as they do when installed, and each run
+ends with a policy log. Choose whether approvals are answered yes or no, share a
+program as a link, or run the same sandbox from a terminal or an agent with
+[`node playground/run.mjs`](playground/README.md). Every run has a 10-second
+budget that also stops runaway computation.
 
 ## Why a new language
 

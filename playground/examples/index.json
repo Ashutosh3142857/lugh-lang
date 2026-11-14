@@ -1,0 +1,16 @@
+[
+  {"id": "notes_agent", "group": "Agents and policy", "name": "Notes agent over MCP", "mode": "run"},
+  {"id": "refund_desk", "group": "Agents and policy", "name": "Refund desk with limits", "mode": "run"},
+  {"id": "issue_triage", "group": "Agents and policy", "name": "GitHub issue triage", "mode": "run"},
+  {"id": "inbox_assistant", "group": "Agents and policy", "name": "Inbox assistant", "mode": "run"},
+  {"id": "fare_watch", "group": "Agents and policy", "name": "Fallbacks and consensus", "mode": "run"},
+  {"id": "budget_guard", "group": "Agents and policy", "name": "Budgets stop runaway loops", "mode": "run"},
+  {"id": "sales_report", "group": "Data", "name": "CSV to Markdown report", "mode": "run"},
+  {"id": "reasoning", "group": "Data", "name": "Matching and grounding", "mode": "run"},
+  {"id": "grounded", "group": "Data", "name": "Grounded extraction", "mode": "run"},
+  {"id": "stats_dates", "group": "Data", "name": "Statistics and dates", "mode": "run"},
+  {"id": "collections", "group": "Language", "name": "Collections and approval", "mode": "run"},
+  {"id": "validation", "group": "Language", "name": "Validation and templates", "mode": "run"},
+  {"id": "tests", "group": "Language", "name": "Tests", "mode": "test"},
+  {"id": "web_app", "group": "Web", "name": "Routes and pages", "mode": "test"}
+]

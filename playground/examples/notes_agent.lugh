@@ -1,0 +1,24 @@
+# An agent working through an MCP server. Each tool's effect comes from its MCP
+# annotations: list_notes is read-only, add_note is a submit, delete_note is
+# destructive. The policy decides which of those may run.
+# Try: switch "When asked" to "Decline", or change `deny delete` to `allow delete`.
+
+agent NotesAgent
+  use mcp
+  policy
+    allow read
+    ask human before submit
+    deny delete
+
+  goal "Capture the visa checklist as notes"
+    let tools = mcp.tools "notes"
+    let names = join(map t in tools to t.name, ", ")
+    log "Server offers: {names}"
+    mcp.call "notes" "add_note" {title: "Biometrics", body: "Book the appointment"}
+    mcp.call "notes" "add_note" {title: "Insurance", body: "Buy travel cover"}
+    let notes = mcp.call "notes" "list_notes"
+    log "Notes now: {map n in notes to n.title}"
+    ensure count(notes) >= 4 else stop "Notes were not saved"
+
+  goal "Deleting is blocked by policy"
+    mcp.call "notes" "delete_note" {title: "Insurance"}

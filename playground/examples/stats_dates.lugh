@@ -1,0 +1,10 @@
+agent Analyst
+  goal "Summarise a month of sales"
+    let sales = [1200, 950, 1430, 2100, 870, 1990, 1600]
+    log "Mean {round(stats.mean(sales), 1)}, median {stats.median(sales)}"
+    log "Std dev {round(stats.stdev(sales), 1)}, 90th percentile {stats.percentile(sales, 90)}"
+    let start = "2026-11-14"
+    let due = time.add(start, 10, "days")
+    log "Report due {due}, a {time.weekday(due)}"
+    let week = time.start_of(start, "week")
+    log "Week began {week}"

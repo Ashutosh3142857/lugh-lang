@@ -1,0 +1,35 @@
+# Refund damaged and late orders, within limits the code enforces.
+# Reads run on their own, every refund asks you first, and a single
+# destructive call (void_all) is never allowed, even if a bug calls it.
+
+agent RefundDesk
+  use fs, mcp
+  budget time 30s, calls 12
+  policy
+    allow read
+    ask human before submit
+    deny delete
+
+  goal "Refund damaged and late orders"
+    let config = fs.read "config.json" as json
+    let orders = csv.parse(fs.read "orders.csv")
+    let eligible = filter o in orders where o.status == "damaged" or o.status == "late"
+    log "{count(eligible)} of {count(orders)} orders are eligible"
+
+    # Damaged items get a full refund, late ones 20%. Anything over the limit goes to a person.
+    each o in eligible
+      let amount = o.amount
+      when o.status == "late"
+        let amount = round(o.amount * 0.2)
+      when amount > config.refund_limit
+        log "Skipped {o.order_id} ({o.customer}): INR {amount} is over the limit, escalate to a manager"
+      otherwise
+        mcp.call "payments" "refund" {order_id: o.order_id, amount: amount}
+
+    let done = mcp.call "payments" "list_refunds"
+    log "Refunded {count(done)} order(s), INR {sum(map r in done to r.amount)} in total"
+    let balance = mcp.call "payments" "get_balance"
+    log "Balance now INR {balance.balance}"
+
+  goal "A buggy line tries to void everything"
+    mcp.call "payments" "void_all" {}

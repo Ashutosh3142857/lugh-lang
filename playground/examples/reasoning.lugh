@@ -1,0 +1,46 @@
+# Lugh's reasoning primitives, all deterministic and offline: relevance,
+# grounded extraction, relational matching, simplicity and novelty.
+
+agent Reconciler
+  goal "Match invoices to payments"
+    let invoices = [
+      {id: "INV-1", client: "Northwind", amount: 18400},
+      {id: "INV-2", client: "Contoso", amount: 9200},
+      {id: "INV-3", client: "Fabrikam", amount: 5100},
+      {id: "INV-4", client: "Northwind", amount: 7300}
+    ]
+    let payments = [
+      {ref: "TX-88", payer: "Northwind", amount: 18400},
+      {ref: "TX-89", payer: "Fabrikam", amount: 5100},
+      {ref: "TX-90", payer: "Contoso", amount: 9000}
+    ]
+    # every invoice/payment pair where client and amount both match
+    let paid = pairs i from invoices, p from payments where i.client == p.payer and i.amount == p.amount
+    each m in paid
+      log "Paid: {m.i.id} by {m.p.ref}"
+    let paid_ids = map m in paid to m.i.id
+    let open = filter i in invoices where not contains(paid_ids, i.id)
+    log "Still open: {map i in open to i.id}, INR {sum(map i in open to i.amount)}"
+    let by_client = group open by client
+    log "Open by client: {keys(by_client)}"
+
+  goal "Ground every claim in the source"
+    let notes = [
+      "Contoso paid 9,000 of 9,200; the 200 shortfall is a bank fee.",
+      "Northwind asked to split INV-4 into two payments next month.",
+      "Office plants need watering on Fridays."
+    ]
+    let relevant = attend to notes by "Contoso shortfall bank fee" top 1
+    let reason = point to "shortfall reason" in relevant.0
+    log "Why Contoso is short, quoted: {reason}"
+
+  goal "Prefer the simplest plan, notice what is new"
+    let plans = [
+      "Write off the 200 bank fee",
+      "Open a dispute, wait for the bank, re-invoice Contoso for 200, then reconcile again next quarter"
+    ]
+    let plan = simplest of plans
+    log "Plan: {plan}"
+    let repeat = novelty "Write off the 200 bank fee" against plans
+    let fresh = novelty "Northwind wants a 30 day extension" against plans
+    log "Novelty of a repeat: {round(repeat, 2)}, of something new: {round(fresh, 2)}"

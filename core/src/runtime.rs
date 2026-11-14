@@ -159,6 +159,10 @@ pub struct Runtime {
     pub output: Option<Arc<Mutex<String>>>,
     /// Playground: no files, no persistence; approvals are auto-granted and shown.
     pub ephemeral: bool,
+    /// Playground: answer approvals with no instead of yes.
+    pub decline: bool,
+    /// Playground: adapters act on a simulated world instead of the real one.
+    pub sandbox: Option<Arc<Mutex<crate::sandbox::Sandbox>>>,
     human: Arc<Mutex<()>>,
     /// Set in server mode: approvals go to the web inbox instead of the terminal.
     pub inbox: Option<Arc<Approvals>>,
@@ -216,6 +220,8 @@ impl Runtime {
             inbox: None,
             output: None,
             ephemeral: false,
+            decline: false,
+            sandbox: None,
         })
     }
 
@@ -242,6 +248,8 @@ impl Runtime {
             inbox: None,
             output: Some(Arc::new(Mutex::new(String::new()))),
             ephemeral: true,
+            decline: false,
+            sandbox: Some(Arc::new(Mutex::new(crate::sandbox::Sandbox::new()))),
         }
     }
 
@@ -286,6 +294,8 @@ impl Runtime {
             inbox: self.inbox.clone(),
             output: self.output.clone(),
             ephemeral: self.ephemeral,
+            decline: self.decline,
+            sandbox: self.sandbox.clone(),
         }
     }
 
@@ -320,6 +330,17 @@ impl Runtime {
                 let _ = writeln!(f, "{}", Value::Object(rec));
             }
             Sink::Memory(v) => v.push(Value::Object(rec).to_string()),
+        }
+    }
+
+    /// Audit records kept in memory (playground); empty when they go to a file.
+    pub fn audit_records(&self) -> Vec<Value> {
+        match &*self.audit.lock().unwrap() {
+            Sink::Memory(v) => v
+                .iter()
+                .filter_map(|r| serde_json::from_str(r).ok())
+                .collect(),
+            Sink::File(_) => vec![],
         }
     }
 
@@ -390,12 +411,22 @@ impl Runtime {
         }
         let _one_at_a_time = self.human.lock().unwrap();
         if self.auto_yes {
+            if self.ephemeral && self.decline {
+                self.say("👤", &format!("asks you → {q}  … you said no"));
+                self.audit("human", serde_json::json!({"question": q, "answer": "no"}));
+                return false;
+            }
             let how = if self.ephemeral {
-                "would ask you (approved in the playground)"
+                "asks you → "
             } else {
-                "auto-approved"
+                "auto-approved → "
             };
-            self.say("👤", &format!("{how} → {q}"));
+            let tail = if self.ephemeral {
+                "  … you said yes"
+            } else {
+                ""
+            };
+            self.say("👤", &format!("{how}{q}{tail}"));
             self.audit(
                 "human",
                 serde_json::json!({"question": q, "answer": "yes(auto)"}),
@@ -684,7 +715,12 @@ impl Runtime {
                 match channel.as_str() {
                     "console" => self.emit(&format!("  📣 [{target}] {msg}")),
                     "file" => {
-                        adapters::call("fs", "append", &[Value::String(target.clone()), Value::String(msg.clone())]).map_err(Flow::Fail)?;
+                        let args = [Value::String(target.clone()), Value::String(msg.clone())];
+                        match &self.sandbox {
+                            Some(world) => world.lock().unwrap().call("fs", "append", &args),
+                            None => adapters::call("fs", "append", &args),
+                        }
+                        .map_err(Flow::Fail)?;
                     }
                     _ => self.emit(&format!("  📣 [{channel}:{target}] {msg}   (simulated — connect an MCP server for real delivery)")),
                 }
@@ -1103,7 +1139,7 @@ impl Runtime {
                     .iter()
                     .map(|v| {
                         let full = match v {
-                            Value::String(s) => s.clone(),
+                            Value::String(s) => s.replace(['\n', '\r'], " "),
                             other => other.to_string(),
                         };
                         // Keep logs and approval prompts short, and show when something was cut.
@@ -1120,14 +1156,25 @@ impl Runtime {
                         vals.first().map(txt).unwrap_or_default(),
                         vals.get(1).map(txt).unwrap_or_default(),
                     );
-                    Self::mcp_effect(&server, &tool)?
+                    match &self.sandbox {
+                        Some(world) => world
+                            .lock()
+                            .unwrap()
+                            .mcp_effect(&server, &tool)
+                            .map_err(Flow::Fail)?,
+                        None => Self::mcp_effect(&server, &tool)?,
+                    }
                 } else {
                     effect
                 };
                 self.gate(effect, &desc)?;
                 self.say("→", &desc);
                 let t0 = now();
-                match adapters::call(adapter, method, &vals) {
+                let result = match &self.sandbox {
+                    Some(world) => world.lock().unwrap().call(adapter, method, &vals),
+                    None => adapters::call(adapter, method, &vals),
+                };
+                match result {
                     Ok(v) => {
                         self.audit("effect", serde_json::json!({"effect": effect, "action": desc, "ms": ((now() - t0) * 1000.0) as u64}));
                         adapters::cast(v, cast.as_deref()).map_err(Flow::Fail)?

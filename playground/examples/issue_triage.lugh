@@ -1,0 +1,34 @@
+# Triage GitHub issues: rank by relevance, comment on the crashes, open a
+# tracking issue, and show that `attempt` cannot swallow a policy denial.
+
+agent IssueTriage
+  use mcp
+  budget calls 15
+  policy
+    allow read
+    ask human before submit
+    deny delete
+
+  goal "Find crash reports and open a tracking issue"
+    let open = mcp.call "github" "list_issues" {}
+    log "{count(open)} open issues"
+    let crashes = attend to open by "app crash on startup error" top 2
+    each i in crashes
+      log "Crash: #{i.number} {i.title}"
+      mcp.call "github" "comment" {number: i.number, body: "Linked to the crash tracking issue."}
+    let titles = join(map i in crashes to "#{i.number}", ", ")
+    let tracking = mcp.call "github" "create_issue" {title: "Track crashes: {titles}", body: "Collected by IssueTriage."}
+    log "Opened #{tracking.number}: {tracking.title}"
+
+  goal "Clean up docs issues"
+    let docs = mcp.call "github" "list_issues" {label: "docs"}
+    each i in docs
+      mcp.call "github" "close_issue" {number: i.number}
+    log "Closed {count(docs)} docs issue(s)"
+
+  goal "Policy denials always propagate"
+    # A fallback can't route around the policy: this goal fails, by design.
+    let r = attempt
+      mcp.call "github" "delete_repo" {}
+    otherwise
+      log "never printed"

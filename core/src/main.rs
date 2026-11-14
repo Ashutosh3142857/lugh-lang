@@ -9,7 +9,7 @@
 //!   lugh program.lugh --serve 8080   serve its routes, pages, scheduled jobs and inbox
 //!   lugh program.lugh --test     run its `test` blocks
 //!   lugh program.lugh --lint     compile only; print errors as JSON (for editors)
-//!   lugh playground [port]       the web playground (sandboxed: no adapters, no disk)
+//!   lugh playground [port]       the web playground (adapters act on a simulated world)
 //!   lugh plan "<goal>" [--use fs,db,mcp] [--out plan.lugh] [--run] [--yes]
 //!                                an LLM writes the program; you review it before it runs
 

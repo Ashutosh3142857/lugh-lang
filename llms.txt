@@ -11,6 +11,11 @@ Use Lugh when an agent's actions must be reviewable before they run: a person ca
 - [Standard library](https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/STDLIB.md): every function, mapped to Python and JavaScript equivalents
 - [MCP and lugh plan](https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/MCP.md): connecting to MCP servers; model-written programs with human approval
 
+## Try a program
+
+- [Playground](https://ashutosh3142857.github.io/lugh-lang/): runs in the browser; adapters (fs, http, mcp, shell) act on a simulated world, behind the real policy gate. Open a program with `#code=<base64url>` and add `?run=1` to run it on load.
+- Check a program without installing: `curl -sO https://raw.githubusercontent.com/Ashutosh3142857/lugh-lang/main/playground/run.mjs && node run.mjs program.lugh` (add `--test`, `--check` or `--decline`; `--sandbox` lists the simulated files, APIs and MCP servers). Exits 1 if a goal or test fails. See [playground/README.md](https://github.com/Ashutosh3142857/lugh-lang/blob/main/playground/README.md).
+
 ## Examples
 
 - [stdlib_test.lugh](https://github.com/Ashutosh3142857/lugh-lang/blob/main/examples/stdlib_test.lugh): the standard library, as tests

@@ -10,7 +10,7 @@ Guidance for coding agents and contributors changing this repository.
 | `lugh.py` | The Python reference runtime (core language and v0.2 primitives) |
 | `examples/` | Example programs; several are run by the test suite |
 | `docs/` | Specification, standard library, MCP and research notes |
-| `playground/` | The browser playground page and its WebAssembly smoke test |
+| `playground/` | The browser playground page, its examples, the `run.mjs` command-line runner and the WebAssembly smoke test |
 | `editors/vscode/` | The VS Code extension and its tests |
 
 ## Before you open a pull request
@@ -24,7 +24,11 @@ cargo rustc --release --lib --no-default-features --crate-type cdylib   # browse
 cd ..
 ./core/target/release/lugh examples/stdlib_test.lugh --test
 node editors/vscode/test/grammar.test.js
+python3 playground/sync_examples.py   # after editing playground/examples/
 ```
+
+To check a Lugh program you wrote without building anything, run it in the
+playground sandbox: `node playground/run.mjs program.lugh` (see playground/README.md).
 
 ## Rules
 

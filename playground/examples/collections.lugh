@@ -1,0 +1,18 @@
+agent FareFinder
+  goal "Find the best fare under budget"
+    let fares = [
+      {airline: "Emirates", price: 48200, stops: 1},
+      {airline: "Etihad", price: 41800, stops: 1},
+      {airline: "Qatar Airways", price: 43950, stops: 1},
+      {airline: "IndiGo", price: 39900, stops: 2}
+    ]
+    let direct_enough = filter f in fares where f.stops <= 1
+    let best = first(sort direct_enough by price)
+    ensure best.price < 45000 else stop "Nothing under budget"
+    log "Best: {best.airline} at INR {best.price}"
+    log "Average fare: {round(avg(map f in fares to f.price), 0)}"
+    ask human "Book {best.airline}?" -> ok
+    when ok
+      log "Booked {best.airline}"
+    otherwise
+      log "Not booked: you said no"

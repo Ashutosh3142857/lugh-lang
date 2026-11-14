@@ -1,0 +1,11 @@
+agent Inbox
+  goal "Find the urgent email and pull out its deadline"
+    let inbox = [
+      {subject: "Lunch on Friday?", body: "Fancy tacos?"},
+      {subject: "Invoice INV-2041 overdue", body: "Invoice INV-2041 is overdue. Payment is due by 30 November 2026. Please confirm."},
+      {subject: "Standup moved", body: "Now at 10:30."}
+    ]
+    let urgent = first(attend to inbox by "overdue invoice payment" top 1)
+    log "Most relevant: {urgent.subject}"
+    let deadline = point to "payment due by date" in urgent.body
+    log "Deadline, quoted from the source: {deadline}"

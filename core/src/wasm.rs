@@ -23,19 +23,22 @@ pub unsafe extern "C" fn lugh_free(ptr: *mut u8, len: usize) {
     drop(Vec::from_raw_parts(ptr, 0, len));
 }
 
-/// mode: 0 = run, 1 = test, 2 = check. Returns the output length in bytes.
+/// mode: 0 = run, 1 = test, 2 = check, 3 = describe the simulated world;
+/// add 4 to answer approvals with no. Returns the output length in bytes.
 ///
 /// # Safety
 /// `ptr` must point to `len` initialised bytes of UTF-8.
 #[no_mangle]
 pub unsafe extern "C" fn lugh_run(ptr: *const u8, len: usize, mode: u32) -> usize {
     let src = String::from_utf8_lossy(std::slice::from_raw_parts(ptr, len)).into_owned();
-    let mode = match mode {
+    let decline = mode & 4 != 0;
+    let mode = match mode & 3 {
         1 => "test",
         2 => "check",
+        3 => "world",
         _ => "run",
     };
-    let out = crate::playground::run(&src, mode).into_bytes();
+    let out = crate::playground::run_with(&src, mode, decline).into_bytes();
     let n = out.len();
     OUTPUT.with(|o| *o.borrow_mut() = out);
     n

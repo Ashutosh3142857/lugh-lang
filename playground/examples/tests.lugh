@@ -1,0 +1,9 @@
+agent Checks
+  test "maths"
+    expect sum([1, 2, 3]) == 6
+    expect round(math.sqrt(2), 3) == 1.414
+  test "text"
+    expect upper("lugh") == "LUGH"
+    expect text.find("INV-2041 due", "INV-([0-9]+)") == "2041"
+  test "this one fails on purpose"
+    expect 1 + 1 == 3

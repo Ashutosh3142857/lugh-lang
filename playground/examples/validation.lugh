@@ -1,0 +1,10 @@
+agent Intake
+  goal "Validate a signup and render a welcome"
+    let spec = {name: "text 2..40", email: "email", age: "int 18..120"}
+    let good = {name: "Ash", email: "ash@example.com", age: 33}
+    let bad = {name: "A", email: "nope", age: 12}
+    log "good: {schema.valid(good, spec)}"
+    each problem in schema.check(bad, spec)
+      log "bad: {problem}"
+    log template.render("Welcome, {{name}}! We'll write to {{email}}.", good)
+    log "id {uuid()}"

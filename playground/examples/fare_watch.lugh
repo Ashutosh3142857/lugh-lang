@@ -1,0 +1,29 @@
+# Resilience and agreement: fall back when an API fails, accept a fare only
+# when independent sources agree, and convert it with live rates.
+
+agent FareWatch
+  use http, fs
+  budget time 20s, calls 12
+  policy
+    allow read
+    deny delete
+
+  goal "Get fares, even when the first API is down"
+    let fares = attempt
+      http.get "https://api.example.com/flaky" as json
+    otherwise
+      http.get "https://api.example.com/fares?to=DUB&max=50000" as json
+    log "Got {count(fares)} fares under INR 50,000"
+
+  goal "Accept a fare only when sources agree"
+    let fare = consensus
+      pick lowest price from http.get "https://api.example.com/fares?to=DUB" as json
+      pick lowest price from fs.read "fares.json" as json
+      pick lowest price from filter f in (fs.read "fares.json" as json) where f.stops <= 2
+    log "Agreed: {fare.airline} on {fare.depart} at INR {fare.price}"
+    let fx = http.get "https://api.example.com/rates" as json
+    log "That is about EUR {round(fare.price * fx.rates.EUR, 2)} or USD {round(fare.price * fx.rates.USD, 2)}"
+    let wx = http.get "https://api.example.com/weather/dublin" as json
+    log "Dublin today: {wx.temp_c}°C, {wx.sky}"
+    let days = time.diff("2026-11-14", fare.depart, "days")
+    log "Departure in {days} days, a {time.weekday(fare.depart)}"

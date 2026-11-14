@@ -1,0 +1,14 @@
+# Budgets are part of the program. This agent may make at most 5 calls,
+# so a runaway loop is stopped by the runtime, not by luck.
+
+agent BudgetGuard
+  use http
+  budget time 10s, calls 5
+  policy
+    allow read
+
+  goal "Poll the weather for ten cities"
+    let cities = ["dublin", "delhi", "dubai", "london", "paris", "rome", "oslo", "lima", "tokyo", "cairo"]
+    each c in cities
+      let w = http.get "https://api.example.com/weather/{c}" as json
+      log "{c}: {w.temp_c}°C, {w.sky}"

@@ -1,0 +1,26 @@
+# Read the inbox, find what matters, quote the deadline from the source
+# (never invented), and draft a reply that only goes out with your yes.
+
+agent InboxAssistant
+  use mcp
+  policy
+    allow read
+    ask human before submit
+    deny delete
+
+  goal "Handle the overdue invoice"
+    let inbox = mcp.call "mail" "list_messages" {}
+    let urgent = first(attend to inbox by "overdue invoice payment due" top 1)
+    log "Most urgent: {urgent.subject} (from {urgent.from})"
+    let deadline = point to "payment due by date" in urgent.body
+    ensure deadline else stop "No deadline in the source"
+    let amount = text.find(urgent.body, "INR ([0-9,]+)")
+    log "Quoted from the email: {deadline} Amount: INR {amount}"
+    let days = time.diff("2026-11-14", "2026-11-30", "days")
+    mcp.call "mail" "send_email" {to: urgent.from, subject: "Re: {urgent.subject}", body: "Thanks, confirming payment of INR {amount} before the deadline ({days} days from today)."}
+    remember "invoice_INV-2041" = {deadline: deadline, amount: amount}
+    let saved = recall "invoice_INV-2041"
+    log "Remembered: {saved.deadline}"
+
+  goal "Someone asks it to clear the inbox"
+    mcp.call "mail" "delete_all" {}

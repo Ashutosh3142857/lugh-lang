@@ -1,0 +1,35 @@
+# Routes (backend) and pages (frontend) in the same language. In the browser
+# this compiles and runs its tests; serve it locally with: lugh web_app.lugh --serve 8080
+
+agent FareDesk
+  use fs
+  policy
+    allow read
+    ask human before submit
+    deny delete
+
+  route GET "/api/fares"
+    respond fs.read "fares.json" as json
+
+  route GET "/api/best"
+    let fares = fs.read "fares.json" as json
+    respond pick lowest price from fares
+
+  route POST "/api/book"
+    ensure request.body.airline else respond 400 "airline is required"
+    let ok = ask human "Book {request.body.airline} at INR {request.body.price}?"
+    ensure ok else respond 403 "Not approved"
+    respond {booked: request.body.airline}
+
+  page "/" title "Fare desk"
+    heading "Delhi to Dublin"
+    stat from "/api/best" field price label "Lowest fare (INR)"
+    table from "/api/fares" columns airline, depart, price, stops
+    form to "/api/book" fields airline, price submit "Request booking"
+    approvals
+
+  test "the cheapest fare is under budget"
+    let fares = fs.read "fares.json" as json
+    let best = pick lowest price from fares
+    expect best.price < 45000
+    expect best.airline == "IndiGo"

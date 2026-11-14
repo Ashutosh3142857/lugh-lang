@@ -1,0 +1,27 @@
+# A data pipeline: parse CSV, validate rows, aggregate, write a Markdown report
+# (a `write` effect the policy allows) and read it back.
+
+agent SalesReport
+  use fs
+  policy
+    allow read, write
+    deny delete
+
+  goal "Build the November order report"
+    let rows = csv.parse(fs.read "orders.csv")
+    let spec = {order_id: "text 6..6", amount: "number 1..100000", email: "email"}
+    let bad = filter r in rows where not schema.valid(r, spec)
+    ensure count(bad) == 0 else stop "{count(bad)} invalid rows"
+
+    let amounts = map r in rows to r.amount
+    let by_status = list.count_by(rows, "status")
+    let biggest = first(sort rows by amount desc)
+    let lines = map s in keys(by_status) to "| {s} | {list.get(by_status, s)} |"
+    let head = "# Orders, November 2026\n\n{{n}} orders, INR {{total}} in total. Median order INR {{median}}, 90th percentile INR {{p90}}.\nLargest: {{big}}.\n\n| Status | Orders |\n| --- | --- |\n{{table}}"
+    let report = template.render(head, {n: count(rows), total: sum(amounts), median: stats.median(amounts), p90: round(stats.percentile(amounts, 90)), big: "{biggest.order_id} by {biggest.customer}, INR {biggest.amount}", table: join(lines, "\n")})
+    fs.write "report.md" report
+    let back = fs.read "report.md"
+    log back
+    let files = fs.list "."
+    let listing = join(files, ", ")
+    log "Files now: {listing}"
