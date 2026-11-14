@@ -2,8 +2,8 @@ name: Release
 
 # Push a tag like v0.7.0, or run this workflow by hand, after setting the same version in
 # core/Cargo.toml, npm/package.json and npm/server.json. It publishes Lugh Core to crates.io, lugh-lang to npm, and the MCP server to the
-# official MCP Registry. Needs repository secrets CARGO_REGISTRY_TOKEN and NPM_TOKEN;
-# the MCP Registry uses GitHub OIDC and needs no secret.
+# official MCP Registry. No secrets: npm and crates.io use Trusted Publishing and the
+# MCP Registry uses GitHub OIDC, all tied to this repository and this workflow file.
 on:
   push:
     tags: ["v*"]
@@ -14,10 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write   # npm provenance and MCP Registry login
-    env:
-      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      id-token: write   # Trusted Publishing (npm, crates.io) and MCP Registry login
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -46,16 +43,15 @@ jobs:
       # Each step skips a version that is already published, so a failed
       # release can simply be re-run.
       - name: Publish lugh-lang to npm
-        if: env.NODE_AUTH_TOKEN != ''
         working-directory: npm
         run: |
           V=$(node -p "require('./package.json').version")
           if npm view "lugh-lang@$V" version >/dev/null 2>&1; then echo "lugh-lang $V is already on npm"; exit 0; fi
-          npm publish --provenance --access public
+          npm install -g npm@latest   # Trusted Publishing needs npm 11.5 or later
+          npm publish --access public
 
       - name: Publish to the MCP Registry
         # The registry checks that the npm package exists, so this follows npm.
-        if: env.NODE_AUTH_TOKEN != ''
         working-directory: npm
         run: |
           NAME=$(node -p "require('./server.json').name"); V=$(node -p "require('./server.json').version")
@@ -66,13 +62,24 @@ jobs:
           ./mcp-publisher login github-oidc
           ./mcp-publisher publish
 
-      - name: Publish Lugh Core to crates.io
-        if: env.CARGO_REGISTRY_TOKEN != ''
+      - name: Is this Lugh Core version on crates.io?
+        id: crate
         working-directory: core
         run: |
           V=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
-          if curl -fsS -A "lugh-release (github.com/Ashutosh3142857/lugh-lang)" "https://crates.io/api/v1/crates/lugh/$V" >/dev/null 2>&1; then echo "lugh $V is already on crates.io"; exit 0; fi
-          cargo publish
+          if curl -fsS -A "lugh-release (github.com/Ashutosh3142857/lugh-lang)" "https://crates.io/api/v1/crates/lugh/$V" >/dev/null 2>&1; then
+            echo "lugh $V is already on crates.io"; echo "published=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Get a short-lived crates.io token
+        if: steps.crate.outputs.published != 'true'
+        id: crates-auth
+        uses: rust-lang/crates-io-auth-action@v1
+      - name: Publish Lugh Core to crates.io
+        if: steps.crate.outputs.published != 'true'
+        working-directory: core
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}
+        run: cargo publish
 
       - name: GitHub release
         env:
