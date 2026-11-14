@@ -1,0 +1,24 @@
+# Lugh
+
+> Lugh is an open-source programming language for AI agents. Programs declare which systems an agent may touch (`use`), its limits (`budget`), and which actions need human approval (`policy`). Every action is typed as read, write, send, spend, delete, submit or execute, and is checked by the runtime before it happens. The core runtime is written in Rust; there is also a Python reference runtime and a WebAssembly build for the browser.
+
+Use Lugh when an agent's actions must be reviewable before they run: a person can read a program's policy block and its `--check` report and know exactly what it can do. `lugh plan "<goal>"` has a model write a Lugh program, compiles it, shows what it can touch, and runs it with only reads allowed without asking.
+
+## Docs
+
+- [README](https://github.com/Ashutosh3142857/lugh-lang/blob/main/README.md): overview, quick start, benchmarks
+- [Language specification](https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/SPEC.md): syntax, statements, expressions, effects, web routes and pages
+- [Standard library](https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/STDLIB.md): every function, mapped to Python and JavaScript equivalents
+- [MCP and lugh plan](https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/MCP.md): connecting to MCP servers; model-written programs with human approval
+
+## Examples
+
+- [stdlib_test.lugh](https://github.com/Ashutosh3142857/lugh-lang/blob/main/examples/stdlib_test.lugh): the standard library, as tests
+- [notes_agent.lugh](https://github.com/Ashutosh3142857/lugh-lang/blob/main/examples/notes_agent.lugh): an agent using an MCP server under a policy
+- [fare_desk.lugh](https://github.com/Ashutosh3142857/lugh-lang/blob/main/examples/fare_desk.lugh): a web app with an approvals inbox
+- [ledger.lugh](https://github.com/Ashutosh3142857/lugh-lang/blob/main/examples/ledger.lugh): SQLite, validation, auth, scheduled jobs
+
+## Optional
+
+- [From research to runtime](https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/RESEARCH.md): how 30 foundational ML papers informed the language
+- [Lugh Core](https://github.com/Ashutosh3142857/lugh-lang/blob/main/core/README.md): runtime architecture and build instructions
