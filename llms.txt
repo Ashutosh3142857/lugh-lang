@@ -14,7 +14,8 @@ Use Lugh when an agent's actions must be reviewable before they run: a person ca
 ## Try a program
 
 - [Playground](https://ashutosh3142857.github.io/lugh-lang/): runs in the browser; adapters (fs, http, mcp, shell) act on a simulated world, behind the real policy gate. Open a program with `#code=<base64url>` and add `?run=1` to run it on load.
-- Check a program without installing: `curl -sO https://raw.githubusercontent.com/Ashutosh3142857/lugh-lang/main/playground/run.mjs && node run.mjs program.lugh` (add `--test`, `--check` or `--decline`; `--sandbox` lists the simulated files, APIs and MCP servers). Exits 1 if a goal or test fails. See [playground/README.md](https://github.com/Ashutosh3142857/lugh-lang/blob/main/playground/README.md).
+- Check a program without installing: `npx lugh-lang run program.lugh` (also `test`, `check`, `sandbox`; `--decline` answers approvals with no). Exits 1 if a goal or test fails.
+- MCP server: `npx -y lugh-lang mcp` (registry name `io.github.Ashutosh3142857/lugh`). Tools: `lugh_reference`, `lugh_check`, `lugh_run`, `lugh_test`, `lugh_sandbox`; all read-only, programs run in the sandbox. See [npm/README.md](https://github.com/Ashutosh3142857/lugh-lang/blob/main/npm/README.md).
 
 ## Examples
 

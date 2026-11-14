@@ -35,6 +35,16 @@ agent FlightScout
 
 - **In your browser:** the [Lugh Playground](https://ashutosh3142857.github.io/lugh-lang/) runs Lugh
   compiled to WebAssembly, with nothing to install.
+- **From a terminal, no install:** `npx lugh-lang run program.lugh` runs a program in
+  the same sandbox and prints a policy log (`test`, `check` and `sandbox` work too).
+- **For AI agents, over MCP:** `npx lugh-lang mcp` is an
+  [MCP server](npm/README.md), listed in the
+  [MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Ashutosh3142857/lugh)
+  as `io.github.Ashutosh3142857/lugh`. An agent can read the language reference,
+  write a program, check it and dry-run it, then show you the policy log:
+  ```json
+  { "mcpServers": { "lugh": { "command": "npx", "args": ["-y", "lugh-lang", "mcp"] } } }
+  ```
 - **Locally:** `lugh playground` serves the same page on http://127.0.0.1:8000.
 - **In VS Code:** the [extension](editors/vscode) adds highlighting, snippets,
   live error checking and run commands.
@@ -45,7 +55,7 @@ run. Nothing real is touched, but every call still passes the policy gate, so
 `allow`, `ask` and `deny` behave exactly as they do when installed, and each run
 ends with a policy log. Choose whether approvals are answered yes or no, share a
 program as a link, or run the same sandbox from a terminal or an agent with
-[`node playground/run.mjs`](playground/README.md). Every run has a 10-second
+`npx lugh-lang`. Every run has a 10-second
 budget that also stops runaway computation.
 
 ## Why a new language

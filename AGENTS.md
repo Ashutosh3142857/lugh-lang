@@ -29,7 +29,7 @@ python3 playground/sync_examples.py   # after editing playground/examples/
 ```
 
 To check a Lugh program you wrote without building anything, run it in the
-playground sandbox: `node playground/run.mjs program.lugh` (see playground/README.md).
+playground sandbox: `npx lugh-lang run program.lugh` (or `node playground/run.mjs`).
 
 ## Rules
 

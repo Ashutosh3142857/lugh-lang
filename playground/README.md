@@ -31,8 +31,10 @@ requests, so you can see both paths.
 
 ## For agents and scripts
 
-Run any program in the same sandbox from the command line, no install needed
-(Node 18 or later):
+Run any program in the same sandbox from the command line with
+`npx lugh-lang run program.lugh`, or serve it to MCP clients with
+`npx lugh-lang mcp` (see [npm/README.md](../npm/README.md)). Without npm, the
+single-file runner below does the same (Node 18 or later):
 
 ```bash
 curl -sO https://raw.githubusercontent.com/Ashutosh3142857/lugh-lang/main/playground/run.mjs
