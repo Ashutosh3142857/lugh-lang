@@ -1,6 +1,6 @@
 [package]
 name = "lugh"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2021"
 description = "Lugh Core: runtime and CLI for Lugh, a programming language for AI agents with policy, budgets and human approval in the syntax"
 license = "MIT"

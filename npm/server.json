@@ -9,12 +9,12 @@
     "subfolder": "npm"
   },
   "websiteUrl": "https://ashutosh3142857.github.io/lugh-lang/",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "lugh-lang",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "transport": {
         "type": "stdio"
       },
