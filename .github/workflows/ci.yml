@@ -81,6 +81,7 @@ jobs:
           name: playground
           path: |
             playground/index.html
+            playground/stats.html
             playground/lugh.wasm
             playground/run.mjs
 

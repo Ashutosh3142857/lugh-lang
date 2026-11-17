@@ -51,6 +51,8 @@ agent FlightScout
 
   [![Lugh MCP server on Glama](https://glama.ai/mcp/servers/Ashutosh3142857/lugh-lang/badges/card.svg)](https://glama.ai/mcp/servers/Ashutosh3142857/lugh-lang)
   [![Lugh MCP server on mcprush](https://mcprush.com/badge/lugh-mcp/card.svg)](https://mcprush.com/to/lugh-mcp?ref=badge)
+- **Usage:** downloads, traffic and stars are recorded daily and charted at
+  [ashutosh3142857.github.io/lugh-lang/stats.html](https://ashutosh3142857.github.io/lugh-lang/stats.html).
 - **Locally:** `lugh playground` serves the same page on http://127.0.0.1:8000.
 - **In VS Code:** the [extension](editors/vscode) adds highlighting, snippets,
   live error checking and run commands.
