@@ -47,6 +47,12 @@ agent FlightScout
   { "mcpServers": { "lugh": { "command": "npx", "args": ["-y", "lugh-lang", "mcp"] } } }
   ```
 
+  One-click install:
+  [![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=lugh&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsImx1Z2gtbGFuZyIsIm1jcCJdfQ%3D%3D)
+  [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Lugh_MCP-0098FF?logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=lugh&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22lugh-lang%22%2C%22mcp%22%5D%7D)
+
+  In Claude Code: `claude mcp add lugh -- npx -y lugh-lang mcp`
+
   It is also listed on Glama and mcprush, which grade servers independently:
 
   [![Lugh MCP server on Glama](https://glama.ai/mcp/servers/Ashutosh3142857/lugh-lang/badges/card.svg)](https://glama.ai/mcp/servers/Ashutosh3142857/lugh-lang)
