@@ -49,7 +49,8 @@ function tile(v,l){ return `<div class="tile"><div class="v">${fmt(v)}</div><div
 
 // Bar chart for one or two daily series. Missing days show as zero.
 function chart(title, note, series){
-  const all = [...new Set(series.flatMap(s=>days(s.data)))].sort();
+  let all = [...new Set(series.flatMap(s=>days(s.data)))].sort();
+  while(all.length && series.every(s=>!(s.data[all[0]]))) all.shift();  // skip empty days before the first activity
   if(!all.length) return `<div class="card"><h2>${title}</h2><p>${note}</p><div class="empty">No data yet</div></div>`;
   const start = new Date(all[0]), end = new Date(all[all.length-1]);
   const dates = []; for(let d=new Date(start); d<=end; d.setUTCDate(d.getUTCDate()+1)) dates.push(d.toISOString().slice(0,10));
