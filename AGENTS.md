@@ -12,6 +12,8 @@ Guidance for coding agents and contributors changing this repository.
 | `docs/` | Specification, standard library, MCP and research notes |
 | `playground/` | The browser playground page, its examples, the `run.mjs` command-line runner and the WebAssembly smoke test |
 | `editors/vscode/` | The VS Code extension and its tests |
+| `skills/lugh/` | An Agent Skill that teaches coding agents to write and dry-run Lugh |
+| `templates/` | Index of starter agents with playground links |
 | `npm/` | The `lugh-lang` npm package: sandbox CLI and MCP server over the WebAssembly build |
 
 ## Before you open a pull request

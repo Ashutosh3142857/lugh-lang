@@ -57,6 +57,10 @@ agent FlightScout
 
   [![Lugh MCP server on Glama](https://glama.ai/mcp/servers/Ashutosh3142857/lugh-lang/badges/card.svg)](https://glama.ai/mcp/servers/Ashutosh3142857/lugh-lang)
   [![Lugh MCP server on mcprush](https://mcprush.com/badge/lugh-mcp/card.svg)](https://mcprush.com/to/lugh-mcp?ref=badge)
+- **Templates:** [templates/](templates/) has starting points for common agents (refund desk,
+  inbox assistant, issue triage and more), each with a one-click playground link.
+- **For coding agents:** the [Lugh skill](skills/lugh/SKILL.md) teaches Claude Code and other
+  agents the write, check, dry-run and show-the-policy-log workflow.
 - **Usage:** downloads, traffic and stars are recorded daily and charted at
   [ashutosh3142857.github.io/lugh-lang/stats.html](https://ashutosh3142857.github.io/lugh-lang/stats.html).
 - **Locally:** `lugh playground` serves the same page on http://127.0.0.1:8000.
