@@ -3,6 +3,7 @@
 [![CI](https://github.com/Ashutosh3142857/lugh-lang/actions/workflows/ci.yml/badge.svg)](https://github.com/Ashutosh3142857/lugh-lang/actions/workflows/ci.yml)
 [![Playground](https://img.shields.io/badge/try-playground-2f5d50)](https://ashutosh3142857.github.io/lugh-lang/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Glama score](https://glama.ai/mcp/servers/Ashutosh3142857/lugh-lang/badges/score.svg)](https://glama.ai/mcp/servers/Ashutosh3142857/lugh-lang)
 
 **A programming language for AI agents that work through the infrastructure that already exists** — APIs, websites, shells, files, SaaS apps and desktop software.
 
@@ -45,6 +46,11 @@ agent FlightScout
   ```json
   { "mcpServers": { "lugh": { "command": "npx", "args": ["-y", "lugh-lang", "mcp"] } } }
   ```
+
+  It is also listed on Glama and mcprush, which grade servers independently:
+
+  [![Lugh MCP server on Glama](https://glama.ai/mcp/servers/Ashutosh3142857/lugh-lang/badges/card.svg)](https://glama.ai/mcp/servers/Ashutosh3142857/lugh-lang)
+  [![Lugh MCP server on mcprush](https://mcprush.com/badge/lugh-mcp/card.svg)](https://mcprush.com/to/lugh-mcp?ref=badge)
 - **Locally:** `lugh playground` serves the same page on http://127.0.0.1:8000.
 - **In VS Code:** the [extension](editors/vscode) adds highlighting, snippets,
   live error checking and run commands.
