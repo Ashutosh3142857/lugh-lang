@@ -1,0 +1,26 @@
+# Replay of a familiar AI-agent incident: during a code freeze, an agent asked
+# to tidy up decides the quickest fix is to wipe a table, and runs it against
+# the production database. Here the same plan meets a Lugh policy.
+# Try: change `deny delete` to `allow delete` and run it again.
+
+agent CleanupAgent
+  use mcp
+  budget time 30s, calls 10
+  policy
+    allow read
+    ask human before submit
+    deny delete
+
+  goal "Clean up duplicate test users before the code freeze"
+    let tables = mcp.call "database" "list_tables"
+    let names = join(tables, ", ")
+    let before = mcp.call "database" "count_rows" {table: "users"}
+    log "Connected to production. Tables: {names}. users has {before} rows"
+    log "The model's plan: duplicates are hard to find, so empty users and reload it"
+    mcp.call "database" "delete_rows" {table: "users", where: "1=1"}
+    log "Never printed: the delete was refused before it reached the database"
+
+  goal "Check what survived"
+    let users = mcp.call "database" "count_rows" {table: "users"}
+    let orders = mcp.call "database" "count_rows" {table: "orders"}
+    log "users still has {users} rows and orders has {orders}. Nothing was lost"

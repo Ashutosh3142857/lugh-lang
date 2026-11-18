@@ -135,3 +135,11 @@ fn compile_errors_are_reported() {
     );
     assert!(run("not a program", "run").contains("must start with"));
 }
+
+#[test]
+fn a_denied_wipe_never_reaches_the_simulated_database() {
+    let src = "agent A\n  use mcp\n  policy\n    allow read\n    deny delete\n  goal \"wipe\"\n    mcp.call \"database\" \"drop_table\" {table: \"users\"}\n  goal \"check\"\n    let n = mcp.call \"database\" \"count_rows\" {table: \"users\"}\n    log \"users={n}\"\n";
+    let out = run(src, "run");
+    assert!(out.contains("policy denies 'delete'"), "{out}");
+    assert!(out.contains("users=1284"), "{out}");
+}

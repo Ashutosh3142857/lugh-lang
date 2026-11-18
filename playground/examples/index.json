@@ -1,4 +1,5 @@
 [
+  {"id": "prod_db_incident", "group": "Agents and policy", "name": "Agent tries to wipe production", "mode": "run"},
   {"id": "notes_agent", "group": "Agents and policy", "name": "Notes agent over MCP", "mode": "run"},
   {"id": "refund_desk", "group": "Agents and policy", "name": "Refund desk with limits", "mode": "run"},
   {"id": "issue_triage", "group": "Agents and policy", "name": "GitHub issue triage", "mode": "run"},

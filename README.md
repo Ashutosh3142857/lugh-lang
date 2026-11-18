@@ -70,7 +70,7 @@ agent FlightScout
   live error checking and run commands.
 
 In the playground, adapters act on a simulated world: a few files, an HTTP API
-and four MCP servers (notes, GitHub, payments, mail), created fresh for every
+and five MCP servers (notes, GitHub, payments, mail, a database), created fresh for every
 run. Nothing real is touched, but every call still passes the policy gate, so
 `allow`, `ask` and `deny` behave exactly as they do when installed, and each run
 ends with a policy log. Choose whether approvals are answered yes or no, share a

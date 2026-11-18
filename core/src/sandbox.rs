@@ -3,8 +3,8 @@
 //!
 //! Every call still goes through the policy gate first, exactly as it would
 //! with real adapters: only the adapter's effect is simulated. The world holds
-//! a few files, an HTTP API at https://api.example.com and four MCP servers
-//! (notes, github, payments, mail). It is created fresh for every run.
+//! a few files, an HTTP API at https://api.example.com and five MCP servers
+//! (notes, github, payments, mail, database). It is created fresh for every run.
 
 use crate::info::txt;
 use serde_json::{json, Map, Value};
@@ -19,6 +19,7 @@ pub struct Sandbox {
     payments: Vec<Value>,
     balance: f64,
     mail_out: Vec<Value>,
+    tables: BTreeMap<String, i64>,
 }
 
 const FARES: &str = r#"[
@@ -87,6 +88,11 @@ impl Sandbox {
             payments: vec![],
             balance: 250000.0,
             mail_out: vec![],
+            tables: BTreeMap::from([
+                ("users".to_string(), 1284),
+                ("orders".to_string(), 5310),
+                ("sessions".to_string(), 220),
+            ]),
         }
     }
 
@@ -130,6 +136,18 @@ impl Sandbox {
                 ),
                 t("delete_all", "Delete every message", false, true),
             ],
+            "database" => vec![
+                t(
+                    "list_tables",
+                    "Tables in the production database",
+                    true,
+                    false,
+                ),
+                t("count_rows", "Count rows {table}", true, false),
+                t("insert_rows", "Insert rows {table, rows}", false, false),
+                t("delete_rows", "Delete rows {table, where}", false, true),
+                t("drop_table", "Drop a table {table}", false, true),
+            ],
             _ => return None,
         })
     }
@@ -149,7 +167,7 @@ impl Sandbox {
     pub fn mcp_effect(&self, server: &str, tool: &str) -> Result<&'static str, String> {
         let tools = Self::tools(server).ok_or_else(|| {
             format!(
-                "mcp: no server '{server}' in the playground (try notes, github, payments or mail)"
+                "mcp: no server '{server}' in the playground (try notes, github, payments, mail or database)"
             )
         })?;
         tools
@@ -223,7 +241,7 @@ impl Sandbox {
             ("mcp", "tools") => {
                 let server = txt(arg(0)?);
                 let tools = Self::tools(&server).ok_or_else(|| {
-                    format!("mcp: no server '{server}' in the playground (try notes, github, payments or mail)")
+                    format!("mcp: no server '{server}' in the playground (try notes, github, payments, mail or database)")
                 })?;
                 Ok(Value::Array(
                     tools
@@ -379,6 +397,46 @@ impl Sandbox {
                 Ok(m)
             }
             ("mail", "delete_all") => Ok(json!({"deleted": 4})),
+            ("database", "list_tables") => {
+                Ok(Value::from(self.tables.keys().cloned().collect::<Vec<_>>()))
+            }
+            ("database", "count_rows") => {
+                let t = s("table");
+                self.tables
+                    .get(&t)
+                    .map(|n| json!(n))
+                    .ok_or_else(|| format!("no table '{t}'"))
+            }
+            ("database", "insert_rows") => {
+                let t = s("table");
+                let n = input
+                    .get("rows")
+                    .and_then(Value::as_array)
+                    .map_or(0, |r| r.len() as i64);
+                let count = self
+                    .tables
+                    .get_mut(&t)
+                    .ok_or_else(|| format!("no table '{t}'"))?;
+                *count += n;
+                Ok(json!({"inserted": n}))
+            }
+            ("database", "delete_rows") => {
+                let t = s("table");
+                let count = self
+                    .tables
+                    .get_mut(&t)
+                    .ok_or_else(|| format!("no table '{t}'"))?;
+                let gone = *count;
+                *count = 0;
+                Ok(json!({"deleted": gone}))
+            }
+            ("database", "drop_table") => {
+                let t = s("table");
+                self.tables
+                    .remove(&t)
+                    .map(|_| json!({"dropped": t}))
+                    .ok_or_else(|| format!("no table '{t}'"))
+            }
             _ => Err(format!("mcp: server '{server}' has no tool '{tool}'")),
         }
     }
@@ -404,5 +462,6 @@ MCP:   notes    list_notes (read), add_note (submit), delete_note (delete)
        github   list_issues (read), create_issue, comment, close_issue (submit), delete_repo (delete)
        payments get_balance, list_refunds (read), refund (submit), void_all (delete)
        mail     list_messages (read), send_email (submit), delete_all (delete)
+       database list_tables, count_rows (read), insert_rows (submit), delete_rows, drop_table (delete)
 Shell: echo, date and ls only"
 }

@@ -2,7 +2,7 @@
 //! WebAssembly, or on a server via `lugh playground`).
 //!
 //! Safety: adapters never touch the outside world. They act on a simulated one
-//! (see `sandbox.rs`): a few files, an HTTP API and four MCP servers, created
+//! (see `sandbox.rs`): a few files, an HTTP API and five MCP servers, created
 //! fresh for every run. Every call still passes the policy gate first, so
 //! `allow`, `ask human before` and `deny` behave exactly as they do for real.
 //! Approvals are answered by a setting (yes by default), nothing is written to
