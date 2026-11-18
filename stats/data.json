@@ -5,6 +5,12 @@
    "forks": 0,
    "watchers": 0,
    "open_issues": 0
+  },
+  "2026-11-18": {
+   "stars": 1,
+   "forks": 0,
+   "watchers": 0,
+   "open_issues": 0
   }
  },
  "crates": {
@@ -16,7 +22,7 @@
   "v0.7.1": 1,
   "v0.7.0": 1
  },
- "updated": "2026-11-17 15:22 UTC",
+ "updated": "2026-11-18 09:24 UTC",
  "views": {
   "2026-11-03": {
    "count": 0,
@@ -72,6 +78,10 @@
   },
   "2026-11-16": {
    "count": 5,
+   "uniques": 5
+  },
+  "2026-11-17": {
+   "count": 9,
    "uniques": 5
   }
  },
@@ -131,10 +141,14 @@
   "2026-11-16": {
    "count": 9,
    "uniques": 7
+  },
+  "2026-11-17": {
+   "count": 45,
+   "uniques": 15
   }
  },
  "referrers": {
-  "as_of": "2026-11-17",
+  "as_of": "2026-11-18",
   "items": [
    {
     "referrer": "github.com",
@@ -177,14 +191,14 @@
  },
  "traffic_14d": {
   "views": {
-   "count": 51,
-   "uniques": 7,
-   "as_of": "2026-11-17"
+   "count": 60,
+   "uniques": 11,
+   "as_of": "2026-11-18"
   },
   "clones": {
-   "count": 202,
-   "uniques": 91,
-   "as_of": "2026-11-17"
+   "count": 247,
+   "uniques": 103,
+   "as_of": "2026-11-18"
   }
  }
 }
