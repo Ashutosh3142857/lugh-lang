@@ -14,5 +14,8 @@
     "agents",
     "policy",
     "sandbox"
-  ]
+  ],
+  "privacyPolicyUrl": "https://github.com/Ashutosh3142857/lugh-lang/blob/main/PRIVACY.md",
+  "supportUrl": "https://github.com/Ashutosh3142857/lugh-lang/issues",
+  "documentationUrl": "https://github.com/Ashutosh3142857/lugh-lang/blob/main/npm/README.md"
 }

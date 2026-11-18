@@ -16,5 +16,8 @@
     "agents",
     "policy",
     "human-in-the-loop"
-  ]
+  ],
+  "privacyPolicyUrl": "https://github.com/Ashutosh3142857/lugh-lang/blob/main/PRIVACY.md",
+  "supportUrl": "https://github.com/Ashutosh3142857/lugh-lang/issues",
+  "documentationUrl": "https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/GUARD.md"
 }
