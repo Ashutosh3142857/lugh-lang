@@ -32,7 +32,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td{padding:5px 0;border
 <main>
   <div class="tiles" id="tiles"></div>
   <div class="charts" id="charts"></div>
-  <div class="links">Also listed on <a href="https://glama.ai/mcp/servers/Ashutosh3142857/lugh-lang">Glama</a> and <a href="https://mcprush.com/ashutosh3142857/lugh-mcp">mcprush</a>, which keep their own analytics. Numbers are recorded once a day by a GitHub Action; downloads include registry mirrors and automated installs.</div>
+  <div class="links">Also listed on <a href="https://glama.ai/mcp/servers/Ashutosh3142857/lugh-lang">Glama</a>, <a href="https://mcprush.com/ashutosh3142857/lugh-mcp">mcprush</a>, <a href="https://mcpservers.org/servers/ashutosh3142857/lugh-lang">mcpservers.org</a> and <a href="https://cursor.directory/plugins/lugh">cursor.directory</a>, which keep their own analytics. Numbers are recorded once a day by a GitHub Action; downloads include registry mirrors and automated installs.</div>
 </main>
 <div id="tip"></div>
 <script>
@@ -64,6 +64,14 @@ function chart(title, note, series){
     g += `<line x1="${L}" x2="${W-8}" y1="${y}" y2="${y}" stroke="${css('--grid')}"/><text x="${L-6}" y="${y+4}" text-anchor="end">${fmt(v)}</text>`; }
   const every = Math.ceil(dates.length/6);
   dates.forEach((d,i)=>{ if(i%every===0||i===dates.length-1) g+=`<text x="${L+step*i+step/2}" y="${H-6}" text-anchor="middle">${d.slice(5)}</text>`; });
+  if(series.length===1 && series[0].line){
+    // a running total: a line through recorded days, with a dot and value on each
+    const s=series[0], pts=dates.map((d,i)=>[d,i,s.data[d]]).filter(p=>p[2]!=null);
+    const xy=pts.map(([d,i,v])=>[L+step*i+step/2, T+ih-ih*v/max, d, v]);
+    g+=`<polyline fill="none" stroke="${s.color}" stroke-width="2" points="${xy.map(p=>p[0]+','+p[1]).join(' ')}"/>`;
+    xy.forEach(([x,y,d,v])=>{ g+=`<circle cx="${x}" cy="${y}" r="4" fill="${s.color}" data-tip="${d} · ${s.name}: ${v}"/>`; });
+    return `<div class="card"><h2>${title}</h2><p>${note}</p><svg viewBox="0 0 ${W} ${H}">${g}</svg></div>`;
+  }
   series.forEach((s,si)=>{
     dates.forEach((d,i)=>{ const v=s.data[d]??0; if(!v) return;
       const h=ih*v/max, x=L+step*i+(step-bw*series.length)/2+si*bw;
@@ -91,7 +99,7 @@ fetch(DATA, {cache:"no-cache"}).then(r=>r.json()).then(d=>{
     chart("GitHub page views", "Repository traffic per day", [{name:"views",color:a,data:pick(d.views,"count")},{name:"unique visitors",color:b,data:pick(d.views,"uniques")}]) +
     chart("GitHub clones", "Includes CI runs and directory crawlers", [{name:"clones",color:a,data:pick(d.clones,"count")},{name:"unique cloners",color:b,data:pick(d.clones,"uniques")}]) +
     chart("crates.io downloads", "Lugh Core (Rust) per day", [{name:"downloads",color:a,data:d.crates||{}}]) +
-    chart("GitHub stars", "Recorded daily", [{name:"stars",color:b,data:pick(d.github,"stars")}]) +
+    chart("GitHub stars", "Total stars, as recorded each day", [{name:"total stars",color:b,line:true,data:pick(d.github,"stars")}]) +
     (d.referrers && d.referrers.items.length ? `<div class="card"><h2>Where visitors come from</h2><p>GitHub referrers, last 14 days (as of ${d.referrers.as_of})</p><table>${d.referrers.items.map(r=>`<tr><td>${r.referrer}</td><td>${r.count} views · ${r.uniques} unique</td></tr>`).join("")}</table></div>` : "");
 }).catch(e=>{ document.getElementById("updated").textContent = "Could not load stats: " + e.message; });
 
