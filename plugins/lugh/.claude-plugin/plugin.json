@@ -1,10 +1,20 @@
 {
   "name": "lugh",
-  "description": "Guard the MCP servers you already use with allow / ask / deny rules, budgets and an audit log, and write, check and dry-run agent programs whose permissions are part of the code.",
+  "description": "Guard the MCP servers you already use with allow / ask / deny rules, budgets and an audit log (/lugh:protect), and a skill for writing, checking and dry-running agent programs whose permissions are part of the code.",
   "version": "0.7.3",
-  "author": { "name": "Ashutosh Pandey", "url": "https://github.com/Ashutosh3142857" },
+  "author": {
+    "name": "Ashutosh Pandey",
+    "url": "https://github.com/Ashutosh3142857"
+  },
   "homepage": "https://ashutosh3142857.github.io/lugh-lang/",
   "repository": "https://github.com/Ashutosh3142857/lugh-lang",
   "license": "MIT",
-  "keywords": ["mcp", "security", "guardrails", "agents", "policy", "human-in-the-loop"]
+  "keywords": [
+    "mcp",
+    "security",
+    "guardrails",
+    "agents",
+    "policy",
+    "human-in-the-loop"
+  ]
 }

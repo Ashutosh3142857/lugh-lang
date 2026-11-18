@@ -11,8 +11,6 @@ agent programs written in [Lugh](https://github.com/Ashutosh3142857/lugh-lang).
   payments, commands) ask you first, destructive ones are refused before they
   reach the server, and every decision is logged to `~/.lugh/guard-audit.jsonl`.
   `npx lugh-lang protect --undo` reverts it.
-- **The Lugh MCP server**: tools to read the Lugh reference, check a program,
-  dry-run it in a sandbox and run its tests. All read-only; nothing real is touched.
 - **The Lugh skill**: the workflow for writing an agent with least-privilege
   policy, dry-running it, and showing you the policy log before it runs for real.
 
@@ -22,7 +20,11 @@ agent programs written in [Lugh](https://github.com/Ashutosh3142857/lugh-lang).
 /plugin install lugh --marketplace Ashutosh3142857/lugh-lang
 ```
 
-Needs Node.js 18 or later (the tools run through `npx`).
+Needs Node.js 18 or later (protect runs through `npx`).
+
+For the Lugh MCP server (check and dry-run programs from Claude), also install
+`lugh-mcp` from the same marketplace, or run
+`claude mcp add lugh -- npx -y lugh-lang mcp`.
 
 ## Links
 

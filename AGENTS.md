@@ -13,7 +13,7 @@ Guidance for coding agents and contributors changing this repository.
 | `playground/` | The browser playground page, its examples, the `run.mjs` command-line runner and the WebAssembly smoke test |
 | `editors/vscode/` | The VS Code extension and its tests |
 | `skills/lugh/` | An Agent Skill that teaches coding agents to write and dry-run Lugh |
-| `plugins/lugh/`, `.claude-plugin/` | The Claude Code plugin and its marketplace listing (keep `plugins/lugh/skills/lugh/SKILL.md` a copy of `skills/lugh/SKILL.md`) |
+| `plugins/lugh/`, `plugins/lugh-mcp/`, `.claude-plugin/` | The Claude Code plugins (skills; MCP server) and their marketplace listing (keep `plugins/lugh/skills/lugh/SKILL.md` a copy of `skills/lugh/SKILL.md`) |
 | `templates/` | Index of starter agents with playground links |
 | `npm/` | The `lugh-lang` npm package: sandbox CLI and MCP server over the WebAssembly build |
 

@@ -14,6 +14,8 @@ assert.equal(server.packages[0].identifier, pkg.name);
 assert.ok(server.description.length <= 100, "the MCP registry limits descriptions to 100 characters");
 const plugin = JSON.parse(read("../../plugins/lugh/.claude-plugin/plugin.json"));
 assert.equal(plugin.version, cargo, "plugins/lugh/.claude-plugin/plugin.json version differs");
+const mcpPlugin = JSON.parse(read("../../plugins/lugh-mcp/.claude-plugin/plugin.json"));
+assert.equal(mcpPlugin.version, cargo, "plugins/lugh-mcp/.claude-plugin/plugin.json version differs");
 const market = JSON.parse(read("../../.claude-plugin/marketplace.json"));
 assert.equal(market.plugins[0].name, plugin.name, "marketplace entry name must equal the plugin's name");
 assert.equal(read("../../plugins/lugh/skills/lugh/SKILL.md"), read("../../skills/lugh/SKILL.md"), "plugins/lugh/skills/lugh/SKILL.md must be a copy of skills/lugh/SKILL.md");

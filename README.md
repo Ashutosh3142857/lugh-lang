@@ -53,8 +53,8 @@ claude mcp add github -- npx -y lugh-lang guard --policy github -- docker run -i
 Ready-made policies ship for the `filesystem`, `github`, `supabase` and `stripe`
 servers, and you can write your own in a few lines. See [guard mode](docs/GUARD.md).
 
-In Claude Code, the Lugh plugin adds the MCP server and two skills (`/lugh:protect`
-and the Lugh workflow) in one step:
+In Claude Code, the Lugh plugin adds two skills, `/lugh:protect` and the Lugh
+workflow, in one step (add `lugh-mcp` for the MCP server too):
 
 ```
 /plugin install lugh --marketplace Ashutosh3142857/lugh-lang
