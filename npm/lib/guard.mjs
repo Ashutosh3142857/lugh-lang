@@ -288,8 +288,8 @@ function lines(stream, onMessage, onBad) {
   });
 }
 
-// A policy is a file path, or the name of a bundled pack (filesystem, github, supabase, stripe).
-export const PACKS = ["filesystem", "github", "supabase", "stripe"];
+// A policy is a file path, or the name of a bundled pack (default, filesystem, github, supabase, stripe).
+export const PACKS = ["default", "filesystem", "github", "supabase", "stripe"];
 export function resolvePolicy(name) {
   if (existsSync(name)) return name;
   if (PACKS.includes(name)) return fileURLToPath(new URL(`../policies/${name}.lugh`, import.meta.url));
@@ -304,7 +304,7 @@ export function main(argv) {
   const get = (flag) => { const i = opts.indexOf(flag); return i >= 0 ? opts[i + 1] : undefined; };
   const file = get("--policy");
   if (!file || !cmd.length) {
-    process.stderr.write("usage: npx lugh-lang guard --policy <file.lugh | filesystem | github | supabase | stripe> [--audit <log.jsonl>] [--hide-denied] -- <server command> [args...]\n");
+    process.stderr.write("usage: npx lugh-lang guard --policy <file.lugh | default | filesystem | github | supabase | stripe> [--audit <log.jsonl>] [--hide-denied] -- <server command> [args...]\n");
     process.exit(2);
   }
   let policy;

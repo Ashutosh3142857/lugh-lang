@@ -1,0 +1,12 @@
+# Lugh guard policy for any MCP server without a pack of its own.
+#   npx -y lugh-lang guard --policy default -- <server command>
+#
+# Reads run freely. Anything that writes, sends, submits, spends money or runs
+# commands asks first. Anything the server marks destructive is refused. Tools
+# that carry no annotations count as submit, so they ask.
+agent DefaultGuard
+  budget calls 500
+  policy
+    allow read
+    ask human before write, send, submit, spend, execute
+    deny delete

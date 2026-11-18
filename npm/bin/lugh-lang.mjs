@@ -12,6 +12,8 @@ const HELP = `lugh-lang: Lugh, the programming language for AI agents
   npx lugh-lang mcp                         MCP server (stdio) for AI agents
   npx lugh-lang guard --policy <file.lugh> -- <mcp server command>
                                             put a Lugh policy in front of any MCP server
+  npx lugh-lang protect [--yes] [--undo]    guard every MCP server in your Claude, Cursor,
+                                            VS Code and Windsurf configs (asks first)
 
 The sandbox simulates files, an HTTP API and MCP servers, and every call
 passes the real policy gate. To act on real systems, install Lugh Core:
@@ -26,6 +28,9 @@ if (cmd === "--version" || cmd === "-v") {
 if (cmd === "guard") {
   const { main } = await import("../lib/guard.mjs");
   main(process.argv.slice(3));
+} else if (cmd === "protect") {
+  const { main } = await import("../lib/protect.mjs");
+  await main(process.argv.slice(3));
 } else {
 const run = await load();
 if (cmd === "mcp") {
