@@ -6,6 +6,7 @@ the playground, change it, and share it as a link. To run one from a terminal:
 
 | Agent | What it shows | Open |
 | --- | --- | --- |
+| [Agent tries to wipe production](../playground/examples/prod_db_incident.lugh) | An agent decides to empty a production table during a code freeze; the delete is refused and the data survives | [Playground](https://ashutosh3142857.github.io/lugh-lang/#example=prod_db_incident) |
 | [Refund desk](../playground/examples/refund_desk.lugh) | Reads run on their own, every refund asks you first, and a destructive call is never allowed | [Playground](https://ashutosh3142857.github.io/lugh-lang/#example=refund_desk) |
 | [Inbox assistant](../playground/examples/inbox_assistant.lugh) | Finds what matters, quotes the deadline from the source, drafts a reply that only goes out with your yes | [Playground](https://ashutosh3142857.github.io/lugh-lang/#example=inbox_assistant) |
 | [GitHub issue triage](../playground/examples/issue_triage.lugh) | Ranks issues, comments on crashes, opens a tracking issue; `attempt` cannot swallow a policy denial | [Playground](https://ashutosh3142857.github.io/lugh-lang/#example=issue_triage) |
