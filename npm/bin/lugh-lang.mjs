@@ -10,6 +10,8 @@ const HELP = `lugh-lang: Lugh, the programming language for AI agents
   npx lugh-lang check <file|->              compile only
   npx lugh-lang sandbox                     what the simulated world contains
   npx lugh-lang mcp                         MCP server (stdio) for AI agents
+  npx lugh-lang guard --policy <file.lugh> -- <mcp server command>
+                                            put a Lugh policy in front of any MCP server
 
 The sandbox simulates files, an HTTP API and MCP servers, and every call
 passes the real policy gate. To act on real systems, install Lugh Core:
@@ -21,6 +23,10 @@ if (cmd === "--version" || cmd === "-v") {
   console.log(JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
   process.exit(0);
 }
+if (cmd === "guard") {
+  const { main } = await import("../lib/guard.mjs");
+  main(process.argv.slice(3));
+} else {
 const run = await load();
 if (cmd === "mcp") {
   const { serve } = await import("../lib/mcp.mjs");
@@ -36,4 +42,5 @@ if (cmd === "mcp") {
 } else {
   console.error(`unknown command '${cmd}'\n\n${HELP}`);
   process.exit(2);
+}
 }

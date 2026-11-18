@@ -74,6 +74,7 @@ jobs:
           cp playground/lugh.wasm npm/lugh.wasm
           node npm/test/mcp.test.mjs
           node npm/test/versions.test.mjs
+          node --test --test-timeout=15000 npm/test/guard.test.mjs
           (node npm/bin/lugh-lang.mjs run playground/examples/notes_agent.lugh || true) | grep -q "denied by policy"
           cd npm && npm pack --dry-run
       - uses: actions/upload-artifact@v4
