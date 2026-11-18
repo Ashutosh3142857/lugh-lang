@@ -53,10 +53,12 @@ agent FlightScout
 
   In Claude Code: `claude mcp add lugh -- npx -y lugh-lang mcp`
 
-  It is also listed on Glama and mcprush, which grade servers independently:
+  It is also listed on Glama, mcprush and mcpservers.org; Glama and mcprush grade servers independently:
 
   [![Lugh MCP server on Glama](https://glama.ai/mcp/servers/Ashutosh3142857/lugh-lang/badges/card.svg)](https://glama.ai/mcp/servers/Ashutosh3142857/lugh-lang)
   [![Lugh MCP server on mcprush](https://mcprush.com/badge/lugh-mcp/card.svg)](https://mcprush.com/to/lugh-mcp?ref=badge)
+
+  [![Listed on mcpservers.org](https://mcpservers.org/badge.svg)](https://mcpservers.org/servers/ashutosh3142857/lugh-lang)
 - **Templates:** [templates/](templates/) has starting points for common agents (refund desk,
   inbox assistant, issue triage and more), each with a one-click playground link.
 - **For coding agents:** the [Lugh skill](skills/lugh/SKILL.md) teaches Claude Code and other
