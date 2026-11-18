@@ -1,0 +1,12 @@
+{
+  "name": "lugh",
+  "description": "Lugh: policy, budgets and human approval for AI agents and the MCP servers they use",
+  "owner": { "name": "Ashutosh Pandey", "url": "https://github.com/Ashutosh3142857" },
+  "plugins": [
+    {
+      "name": "lugh",
+      "source": "./plugins/lugh",
+      "description": "Guard the MCP servers you already use (allow, ask, deny, audit log), and write, check and dry-run agent programs whose permissions are part of the code"
+    }
+  ]
+}

@@ -30,6 +30,22 @@ In Claude Code:
 claude mcp add filesystem -- npx -y lugh-lang guard --policy filesystem -- npx -y @modelcontextprotocol/server-filesystem ~/projects
 ```
 
+## Guard everything at once
+
+`npx lugh-lang protect` finds the MCP configs of Claude Code (user, local and
+project scopes), Claude Desktop, Cursor, VS Code and Windsurf, and wraps each
+local server in guard with a fitting pack: `filesystem`, `github`, `supabase`,
+`stripe`, or `default` for anything else (reads run; writes, sends, submits,
+spends and commands ask; deletes are refused).
+
+- It prints the plan and asks before writing; `--yes` skips the question.
+- Only the server entries change. Each file is copied to `<file>.lugh-backup` first.
+- Remote (HTTP) servers, servers already guarded and Lugh's own server are skipped.
+- `npx lugh-lang protect --undo` unwraps the entries again and keeps any other
+  edits made to the files since.
+
+Restart your MCP clients afterwards so they start the servers through the guard.
+
 ## What happens to a tool call
 
 1. The guard finds the call's **effect**: `read`, `write`, `send`, `submit`,
@@ -89,6 +105,7 @@ Pass a name instead of a file:
 | `github` | `github/github-mcp-server` | Reads run; writes, comments, pushes and merges ask; deleting repos and files is refused |
 | `supabase` | Supabase MCP (via `mcp-remote`) | SQL that drops, truncates or deletes is refused; all other SQL, migrations, merges and deploys ask |
 | `stripe` | Stripe MCP (via `mcp-remote`) | Lookups run; every write and every money movement asks |
+| `default` | Any other server | Reads run; writes, sends, submits, spends and commands ask; deletes are refused |
 
 The packs live in [`npm/policies/`](../npm/policies). Copy one to start your own.
 

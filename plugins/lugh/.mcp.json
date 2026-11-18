@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "lugh": { "command": "npx", "args": ["-y", "lugh-lang", "mcp"] }
+  }
+}

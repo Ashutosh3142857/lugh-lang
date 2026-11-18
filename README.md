@@ -34,9 +34,17 @@ agent FlightScout
 
 ## Already using MCP servers? Guard them
 
-Put a Lugh policy in front of any MCP server you already use, with no rewrite.
+Put a Lugh policy in front of every MCP server you already use, with no rewrite.
 Reads run, risky actions ask you first, destructive ones never reach the server,
-and every decision is logged:
+and every decision is logged. One command does it for all your clients (Claude
+Code, Claude Desktop, Cursor, VS Code, Windsurf). It shows the plan and asks
+before changing anything:
+
+```bash
+npx lugh-lang protect          # --undo puts everything back
+```
+
+Or guard a single server:
 
 ```bash
 claude mcp add github -- npx -y lugh-lang guard --policy github -- docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server
@@ -44,6 +52,13 @@ claude mcp add github -- npx -y lugh-lang guard --policy github -- docker run -i
 
 Ready-made policies ship for the `filesystem`, `github`, `supabase` and `stripe`
 servers, and you can write your own in a few lines. See [guard mode](docs/GUARD.md).
+
+In Claude Code, the Lugh plugin adds the MCP server and two skills (`/lugh:protect`
+and the Lugh workflow) in one step:
+
+```
+/plugin install lugh --marketplace Ashutosh3142857/lugh-lang
+```
 
 ## Try it
 

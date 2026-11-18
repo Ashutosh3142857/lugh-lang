@@ -16,6 +16,7 @@ npx lugh-lang test program.lugh           # run test blocks
 npx lugh-lang check program.lugh          # compile only
 npx lugh-lang sandbox                     # what the simulated world contains
 npx lugh-lang guard --policy <file|pack> -- <mcp server command>   # guard a real MCP server
+npx lugh-lang protect [--yes] [--undo]    # guard every MCP server in your client configs
 ```
 
 Commands exit with status 1 when a goal, test or compile step fails.
@@ -46,7 +47,10 @@ npx -y lugh-lang guard --policy filesystem -- npx -y @modelcontextprotocol/serve
 Each tool call gets an effect (from the server's annotations or your policy),
 then passes the gate: budgets, deny, allow, otherwise your client asks you.
 Refused calls never reach the server, and every decision goes to an audit log.
-Bundled policies: `filesystem`, `github`, `supabase`, `stripe`. Details:
+Bundled policies: `default`, `filesystem`, `github`, `supabase`, `stripe`.
+`npx lugh-lang protect` does this for every server in your Claude Code, Claude
+Desktop, Cursor, VS Code and Windsurf configs at once (it asks first; `--undo`
+reverts). Details:
 [docs/GUARD.md](https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/GUARD.md).
 
 ## Running for real
