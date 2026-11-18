@@ -1,0 +1,24 @@
+# Lugh guard policy for the GitHub MCP server (github/github-mcp-server)
+#   npx -y lugh-lang guard --policy github -- docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server
+#
+# Reading code, issues and pull requests runs freely. Anything that writes,
+# comments, pushes or merges asks first. Deleting repositories and files is
+# never allowed. Multi-purpose tools (issue_write, projects_write,
+# pull_request_review_write) can delete through a method argument, so they
+# always ask.
+agent GitHubGuard
+  budget calls 300
+  policy
+    allow read
+    ask human before write, submit, send
+    deny delete
+  tools
+    "delete_repository" is delete
+    "delete_file" is delete
+    "merge_pull_request" is write
+    "push_files" is write
+    "create_or_update_file" is write
+    "update_pull_request_branch" is write
+    "get_*" is read
+    "list_*" is read
+    "search_*" is read

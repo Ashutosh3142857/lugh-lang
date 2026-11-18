@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parsePolicy, effectOf, decide } from "../lib/guard.mjs";
+import { parsePolicy, effectOf, decide, resolvePolicy, PACKS } from "../lib/guard.mjs";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const BIN = join(here, "..", "bin", "lugh-lang.mjs");
@@ -20,6 +20,7 @@ const POLICY = `agent TestGuard
     deny delete
   tools
     "legacy_*" is read
+    "add_item" when name matches "^drop|truncate" is delete
 `;
 
 // Start guard around the fake server and talk to it like an MCP client.
@@ -114,6 +115,18 @@ test("ask: no means the call never reaches the server", async () => {
   s.close();
 });
 
+test("argument rules: a destructive payload is denied, the same tool otherwise asks", async () => {
+  const s = session({ elicitation: true, approve: true });
+  await s.ready;
+  await s.send("tools/list");
+  const bad = await s.call("add_item", { name: "DROP TABLE users" });
+  assert.equal(bad.isError, true);
+  assert.match(s.text(bad), /policy denies 'delete'/);
+  assert.match(s.text(await s.call("add_item", { name: "milk" })), /^ran add_item/);
+  assert.deepEqual(JSON.parse(s.text(await s.call("calls_seen"))), ["add_item"]);
+  s.close();
+});
+
 test("ask without an approval prompt in the client: held back, not run", async () => {
   const s = session({ elicitation: false });
   await s.ready;
@@ -181,7 +194,35 @@ test("policy files: effects and tool patterns", () => {
   assert.equal(parsePolicy("agent A\n  budget time 2h\n").time, 7200);
   assert.throws(() => parsePolicy("agent A\n  policy\n    allow everything\n"), /unknown effect 'everything'/);
   assert.throws(() => parsePolicy("agent A\n  tools\n    delete_* is delete\n"), /tool rules look like/);
+  const q = parsePolicy('agent A\n  tools\n    "execute_sql" when query matches "\\b(drop|truncate)\\b" is delete\n    "execute_sql" is execute\n');
+  assert.equal(effectOf(q, "execute_sql", {}, { query: "select 1" }), "execute");
+  assert.equal(effectOf(q, "execute_sql", {}, { query: "Drop table orders" }), "delete");
+  assert.equal(effectOf(q, "execute_sql", {}, {}), "execute");
   // a full Lugh program can be used as a guard file: its goals are ignored
   const prog = parsePolicy("agent R\n  use mcp\n  policy\n    allow read\n  goal \"x\"\n    log 1\n");
   assert.ok(prog.allow.has("read"));
+});
+
+test("bundled policy packs parse and do what their comments say", () => {
+  const pack = (n) => parsePolicy(readFileSync(resolvePolicy(n), "utf8"));
+  for (const n of PACKS) assert.ok(pack(n).deny.has("delete"), `${n} denies delete`);
+  const fs = pack("filesystem");
+  assert.equal(effectOf(fs, "write_file", { annotations: { destructiveHint: true } }), "write");
+  assert.equal(decide(fs, { started: Date.now(), calls: 0 }, "write").verdict, "ask");
+  const gh = pack("github");
+  assert.equal(effectOf(gh, "delete_repository", {}), "delete");
+  assert.equal(effectOf(gh, "merge_pull_request", {}), "write");
+  assert.equal(effectOf(gh, "list_issues", {}), "read");
+  const sb = pack("supabase");
+  assert.equal(effectOf(sb, "execute_sql", {}, { query: "select * from orders" }), "execute");
+  assert.equal(effectOf(sb, "execute_sql", {}, { query: "DROP TABLE orders;" }), "delete");
+  assert.equal(effectOf(sb, "execute_sql", {}, { query: "truncate users" }), "delete");
+  assert.equal(effectOf(sb, "execute_sql", {}, { query: "delete from users where true" }), "delete");
+  assert.equal(effectOf(sb, "apply_migration", {}, { name: "x", query: "create table t (id int)" }), "write");
+  assert.equal(effectOf(sb, "list_tables", {}), "read");
+  const st = pack("stripe");
+  assert.equal(effectOf(st, "stripe_api_read", {}), "read");
+  assert.equal(effectOf(st, "send_money", {}), "spend");
+  assert.equal(decide(st, { started: Date.now(), calls: 0 }, "spend").verdict, "ask");
+  assert.throws(() => resolvePolicy("nope"), /bundled packs/);
 });

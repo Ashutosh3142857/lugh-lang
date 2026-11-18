@@ -1,0 +1,23 @@
+# Lugh guard policy for the Stripe MCP server
+#   npx -y lugh-lang guard --policy stripe -- npx -y mcp-remote https://mcp.stripe.com
+#
+# Looking things up runs freely. Every write to Stripe asks first, and money
+# movement (Treasury sends, transfers and conversions) asks too. Stripe adds
+# its own human confirmation for refunds; this policy adds one in your client
+# for everything else that changes your account.
+agent StripeGuard
+  budget calls 200
+  policy
+    allow read
+    ask human before write, spend, submit
+    deny delete
+  tools
+    "stripe_api_read" is read
+    "stripe_api_search" is read
+    "stripe_api_details" is read
+    "search_stripe_documentation" is read
+    "get_*" is read
+    "stripe_api_write" is write
+    "send_money" is spend
+    "transfer_money" is spend
+    "convert_currency" is spend

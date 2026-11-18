@@ -1,0 +1,17 @@
+# Lugh guard policy for @modelcontextprotocol/server-filesystem
+#   npx -y lugh-lang guard --policy filesystem -- npx -y @modelcontextprotocol/server-filesystem <dir>
+#
+# Reads run freely. Writing, editing and moving ask first (the server marks
+# them destructive, which would otherwise make them deletes). Nothing is ever
+# deleted, and a runaway loop stops after 500 calls.
+agent FilesystemGuard
+  budget calls 500
+  policy
+    allow read
+    ask human before write, submit
+    deny delete
+  tools
+    "write_file" is write
+    "edit_file" is write
+    "move_file" is write
+    "create_directory" is write

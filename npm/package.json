@@ -6,7 +6,7 @@
   "type": "module",
   "bin": { "lugh-lang": "bin/lugh-lang.mjs" },
   "exports": { ".": "./lib/runtime.mjs", "./mcp": "./lib/mcp.mjs" },
-  "files": ["bin/", "lib/", "lugh.wasm", "REFERENCE.md", "README.md"],
+  "files": ["bin/", "lib/", "policies/", "lugh.wasm", "REFERENCE.md", "README.md"],
   "engines": { "node": ">=18" },
   "scripts": { "test": "node test/mcp.test.mjs && node --test --test-timeout=15000 test/guard.test.mjs" },
   "keywords": ["ai-agents", "mcp-proxy", "mcp-guard", "mcp-security", "agents", "mcp", "model-context-protocol", "mcp-server", "programming-language", "guardrails", "human-in-the-loop", "agent-safety", "policy", "webassembly"],

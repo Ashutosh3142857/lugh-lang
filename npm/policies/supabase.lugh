@@ -1,0 +1,31 @@
+# Lugh guard policy for the Supabase MCP server
+#   npx -y lugh-lang guard --policy supabase -- npx -y mcp-remote "https://mcp.supabase.com/mcp?project_ref=<ref>"
+#
+# The production-database rule: SQL that drops, truncates or deletes is
+# refused before it reaches the database, every other statement asks first,
+# and so do migrations, branch merges and deploys. Pattern rules are a speed
+# bump, not a parser: pair this with Supabase's own read_only=true wherever
+# writes are not needed.
+agent SupabaseGuard
+  budget calls 200
+  policy
+    allow read
+    ask human before write, execute, submit, spend
+    deny delete
+  tools
+    "execute_sql" when query matches "\b(drop|truncate|delete|alter\s+table\s+\S+\s+drop|revoke)\b" is delete
+    "execute_sql" is execute
+    "apply_migration" when query matches "\b(drop|truncate|delete)\b" is delete
+    "apply_migration" is write
+    "delete_*" is delete
+    "reset_branch" is delete
+    "pause_project" is delete
+    "merge_branch" is write
+    "rebase_branch" is write
+    "deploy_edge_function" is write
+    "create_project" is spend
+    "create_branch" is spend
+    "list_*" is read
+    "get_*" is read
+    "search_docs" is read
+    "query_logs" is read

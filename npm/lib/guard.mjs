@@ -15,7 +15,8 @@
 // told why. Every decision is appended to a JSONL audit log.
 
 import { spawn } from "node:child_process";
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
@@ -90,11 +91,16 @@ export function parsePolicy(src) {
       return;
     }
     if (section === "tools") {
-      const m = t.match(/^"([^"]+)"\s+is\s+(\w+)$/);
-      if (!m) fail('tool rules look like: "delete_*" is delete');
-      if (!EFFECTS.includes(m[2])) fail(`unknown effect '${m[2]}'`);
-      const re = new RegExp("^" + m[1].split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$");
-      p.tools.push({ pattern: m[1], re, effect: m[2] });
+      const m = t.match(/^"([^"]+)"(?:\s+when\s+([\w.]+)\s+matches\s+"((?:[^"\\]|\\.)*)")?\s+is\s+(\w+)$/);
+      if (!m) fail('tool rules look like: "delete_*" is delete, or "execute_sql" when query matches "drop|truncate" is delete');
+      const [, pattern, arg, argPattern, effect] = m;
+      if (!EFFECTS.includes(effect)) fail(`unknown effect '${effect}'`);
+      const re = new RegExp("^" + pattern.split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$");
+      let when = null;
+      if (arg) {
+        try { when = { arg, re: new RegExp(argPattern.replace(/\\"/g, '"'), "i") }; } catch (e) { fail(`bad pattern: ${e.message}`); }
+      }
+      p.tools.push({ pattern, re, when, effect });
       return;
     }
     fail("unexpected indentation");
@@ -102,9 +108,11 @@ export function parsePolicy(src) {
   return p;
 }
 
-// The effect of one tool: a matching `tools` rule wins, then MCP annotations.
-export function effectOf(policy, name, tool) {
-  const rule = policy.tools.find((r) => r.re.test(name));
+// The effect of one call: the first matching `tools` rule wins, then MCP annotations.
+// A rule with `when <arg> matches "<regex>"` applies only when that argument
+// (a dotted path; objects are matched as JSON) matches, case-insensitively.
+export function effectOf(policy, name, tool, args = {}) {
+  const rule = policy.tools.find((r) => r.re.test(name) && (!r.when || argMatches(args, r.when)));
   if (rule) return rule.effect;
   const a = (tool && tool.annotations) || {};
   if (a.readOnlyHint === true) return "read";
@@ -119,6 +127,13 @@ export function decide(policy, state, effect) {
   if (policy.deny.has(effect)) return { verdict: "deny", reason: `policy denies '${effect}'` };
   if (policy.allow.has(effect)) return { verdict: "allow" };
   return { verdict: "ask" };
+}
+
+function argMatches(args, when) {
+  let v = args;
+  for (const k of when.arg.split(".")) v = v == null ? undefined : v[k];
+  if (v === undefined) return false;
+  return when.re.test(typeof v === "string" ? v : JSON.stringify(v));
 }
 
 function fmtTime(s) { return s >= 3600 ? `${s / 3600}h` : s >= 60 ? `${s / 60}m` : `${s}s`; }
@@ -178,7 +193,7 @@ export function guard({ policy, command, args, audit, hideDenied = false, onExit
   async function onToolCall(msg) {
     const name = msg.params && msg.params.name;
     if (!state.tools.has(name) && state.initialized) await refreshTools();
-    const effect = effectOf(policy, name, state.tools.get(name));
+    const effect = effectOf(policy, name, state.tools.get(name), (msg.params && msg.params.arguments) || {});
     const shown = JSON.stringify((msg.params && msg.params.arguments) || {});
     const action = `${name} ${shown.length > 300 ? shown.slice(0, 300) + "…" : shown}`;
     const d = decide(policy, state, effect);
@@ -273,6 +288,14 @@ function lines(stream, onMessage, onBad) {
   });
 }
 
+// A policy is a file path, or the name of a bundled pack (filesystem, github, supabase, stripe).
+export const PACKS = ["filesystem", "github", "supabase", "stripe"];
+export function resolvePolicy(name) {
+  if (existsSync(name)) return name;
+  if (PACKS.includes(name)) return fileURLToPath(new URL(`../policies/${name}.lugh`, import.meta.url));
+  throw new Error(`no policy file '${name}' (bundled packs: ${PACKS.join(", ")})`);
+}
+
 // CLI entry: lugh-lang guard --policy <file> [--audit <file>] [--hide-denied] -- <command> [args...]
 export function main(argv) {
   const sep = argv.indexOf("--");
@@ -281,11 +304,11 @@ export function main(argv) {
   const get = (flag) => { const i = opts.indexOf(flag); return i >= 0 ? opts[i + 1] : undefined; };
   const file = get("--policy");
   if (!file || !cmd.length) {
-    process.stderr.write("usage: npx lugh-lang guard --policy <file.lugh> [--audit <log.jsonl>] [--hide-denied] -- <server command> [args...]\n");
+    process.stderr.write("usage: npx lugh-lang guard --policy <file.lugh | filesystem | github | supabase | stripe> [--audit <log.jsonl>] [--hide-denied] -- <server command> [args...]\n");
     process.exit(2);
   }
   let policy;
-  try { policy = parsePolicy(readFileSync(file, "utf8")); } catch (e) { process.stderr.write(`lugh guard: ${e.message}\n`); process.exit(2); }
+  try { policy = parsePolicy(readFileSync(resolvePolicy(file), "utf8")); } catch (e) { process.stderr.write(`lugh guard: ${e.message}\n`); process.exit(2); }
   const audit = get("--audit") || join(homedir(), ".lugh", "guard-audit.jsonl");
   guard({ policy, command: cmd[0], args: cmd.slice(1), audit, hideDenied: opts.includes("--hide-denied"), onExit: (code) => process.exit(code) });
 }
