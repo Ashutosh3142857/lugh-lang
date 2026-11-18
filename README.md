@@ -32,6 +32,19 @@ agent FlightScout
       send console "#travel" "Booking {best.airline}"
 ```
 
+## Already using MCP servers? Guard them
+
+Put a Lugh policy in front of any MCP server you already use, with no rewrite.
+Reads run, risky actions ask you first, destructive ones never reach the server,
+and every decision is logged:
+
+```bash
+claude mcp add github -- npx -y lugh-lang guard --policy github -- docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server
+```
+
+Ready-made policies ship for the `filesystem`, `github`, `supabase` and `stripe`
+servers, and you can write your own in a few lines. See [guard mode](docs/GUARD.md).
+
 ## Try it
 
 - **In your browser:** the [Lugh Playground](https://ashutosh3142857.github.io/lugh-lang/) runs Lugh

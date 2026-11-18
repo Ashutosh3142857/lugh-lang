@@ -26,6 +26,15 @@ Use whichever is available, in this order:
 All three run in the same sandbox: files, an HTTP API and MCP servers are
 simulated, but the policy gate and budgets are real.
 
+## Guarding servers the person already uses
+
+When the person wants limits on MCP servers they already run (filesystem,
+GitHub, Supabase, Stripe…), they don't need a Lugh program: put the server
+behind `npx -y lugh-lang guard --policy <pack or file> -- <server command>` in
+their MCP config. Start from a bundled pack (`filesystem`, `github`,
+`supabase`, `stripe`) and see
+[docs/GUARD.md](https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/GUARD.md).
+
 ## Workflow
 
 1. **Read the reference first.** Call `lugh_reference` (or open

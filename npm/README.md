@@ -15,6 +15,7 @@ npx lugh-lang run program.lugh --decline  # answer every approval with no
 npx lugh-lang test program.lugh           # run test blocks
 npx lugh-lang check program.lugh          # compile only
 npx lugh-lang sandbox                     # what the simulated world contains
+npx lugh-lang guard --policy <file|pack> -- <mcp server command>   # guard a real MCP server
 ```
 
 Commands exit with status 1 when a goal, test or compile step fails.
@@ -33,6 +34,20 @@ person the policy log before anything runs for real.
   }
 }
 ```
+
+## Guard mode: a policy in front of any MCP server
+
+Keep the MCP servers you already use and put Lugh's policy gate in front of them:
+
+```bash
+npx -y lugh-lang guard --policy filesystem -- npx -y @modelcontextprotocol/server-filesystem ~/projects
+```
+
+Each tool call gets an effect (from the server's annotations or your policy),
+then passes the gate: budgets, deny, allow, otherwise your client asks you.
+Refused calls never reach the server, and every decision goes to an audit log.
+Bundled policies: `filesystem`, `github`, `supabase`, `stripe`. Details:
+[docs/GUARD.md](https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/GUARD.md).
 
 ## Running for real
 
