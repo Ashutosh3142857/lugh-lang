@@ -75,6 +75,8 @@ jobs:
           node npm/test/mcp.test.mjs
           node npm/test/versions.test.mjs
           node --test --test-timeout=15000 npm/test/guard.test.mjs npm/test/protect.test.mjs
+          npx -y @anthropic-ai/claude-code plugin validate --strict ./plugins/lugh
+          npx -y @anthropic-ai/claude-code plugin validate --strict .
           (node npm/bin/lugh-lang.mjs run playground/examples/notes_agent.lugh || true) | grep -q "denied by policy"
           cd npm && npm pack --dry-run
       - uses: actions/upload-artifact@v4
