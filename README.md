@@ -9,6 +9,28 @@
 
 Lugh is named for the Irish god *Samildánach*, "skilled in all the arts". A Lugh program declares what an agent may touch, how much it may spend, and when a human must approve — and the runtime enforces all of it on every single action.
 
+**Already using MCP servers in Claude Code, Cursor or VS Code?** Put a policy in front of all of them with one command. It shows the plan first, keeps a backup, and `--undo` puts everything back:
+
+```bash
+npx lugh-lang protect
+```
+
+Each local server entry gets wrapped, nothing else in the file changes:
+
+```diff
+ "postgres": {
+-  "command": "uvx",
+-  "args": ["postgres-mcp", "--access-mode=unrestricted"]
++  "command": "npx",
++  "args": ["-y", "lugh-lang", "guard", "--policy", "postgres", "--",
++           "uvx", "postgres-mcp", "--access-mode=unrestricted"]
+ }
+```
+
+Now plain SELECTs run, `DROP` / `TRUNCATE` / `DELETE` never reach the database, and every other change asks you first. [How it works ↓](#already-using-mcp-servers-guard-them)
+
+Or write the agent itself in Lugh:
+
 ```lugh
 agent FlightScout
   use http, fs, shell, llm
@@ -52,8 +74,8 @@ Or guard a single server:
 claude mcp add github -- npx -y lugh-lang guard --policy github -- docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server
 ```
 
-Ready-made policies ship for the `filesystem`, `github`, `supabase` and `stripe`
-servers, and you can write your own in a few lines. See [guard mode](docs/GUARD.md).
+Ready-made policies ship for the `filesystem`, `github`, `supabase`, `stripe`,
+`postgres`, `playwright`, `slack` and `notion` servers, and you can write your own in a few lines. See [guard mode](docs/GUARD.md).
 
 In Claude Code, the Lugh plugin adds two skills, `/lugh:protect` and the Lugh
 workflow, in one step (add `lugh-mcp` for the MCP server too):

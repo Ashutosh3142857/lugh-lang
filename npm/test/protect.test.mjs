@@ -38,6 +38,11 @@ test("packs are chosen from the server's command line", () => {
   assert.equal(packFor({ command: "docker", args: ["run", "ghcr.io/github/github-mcp-server"] }), "github");
   assert.equal(packFor({ command: "npx", args: ["mcp-remote", "https://mcp.supabase.com/mcp"] }), "supabase");
   assert.equal(packFor({ command: "npx", args: ["mcp-remote", "https://mcp.stripe.com"] }), "stripe");
+  assert.equal(packFor({ command: "npx", args: ["@playwright/mcp@latest"] }), "playwright");
+  assert.equal(packFor({ command: "uvx", args: ["postgres-mcp", "--access-mode=unrestricted"] }), "postgres");
+  assert.equal(packFor({ command: "npx", args: ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/db"] }), "postgres");
+  assert.equal(packFor({ command: "npx", args: ["-y", "@modelcontextprotocol/server-slack"] }), "slack");
+  assert.equal(packFor({ command: "npx", args: ["-y", "mcp-remote", "https://mcp.notion.com/mcp"] }), "notion");
   assert.equal(packFor({ command: "python3", args: ["server.py"] }), "default");
 });
 

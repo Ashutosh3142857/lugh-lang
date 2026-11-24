@@ -1,0 +1,43 @@
+# Lugh guard policy for the Notion MCP server (hosted at mcp.notion.com)
+#   npx -y lugh-lang guard --policy notion -- npx -y mcp-remote https://mcp.notion.com/mcp
+#
+# Searching, fetching and querying pages runs freely. Creating, editing,
+# moving and commenting ask first, and so do calendar changes and anything
+# that starts or messages a Notion agent. Deleting pages, databases and
+# comments, and cancelling events, are refused.
+agent NotionGuard
+  budget calls 300
+  policy
+    allow read
+    ask human before write, send, submit, execute
+    deny delete
+  tools
+    "notion-delete-*" is delete
+    "notion-calendar-cancel-events" is delete
+    "notion-create-comment" is send
+    "notion-send-message-to-session" is send
+    "notion-calendar-create-events" is send
+    "notion-calendar-update-events" is send
+    "notion-spawn-session" is execute
+    "notion-stop-session" is execute
+    "notion-update-enabled-skills" is submit
+    "notion-resolve-suggested-edit" is submit
+    "notion-create-*" is write
+    "notion-update-*" is write
+    "notion-move-pages" is write
+    "notion-duplicate-page" is write
+    "notion-restore-pages" is write
+    "notion-upload-skill" is write
+    "notion-convert-page-to-skill" is write
+    "notion-set-*" is write
+    "notion-search" is read
+    "notion-*-search" is read
+    "notion-fetch" is read
+    "notion-get-*" is read
+    "notion-list-*" is read
+    "notion-query-*" is read
+    "notion-calendar-list-*" is read
+    "notion-search-*" is read
+    "notion-download-*" is read
+    "notion-read-*" is read
+    "notion-wait-session" is read

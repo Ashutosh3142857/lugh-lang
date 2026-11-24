@@ -1,6 +1,6 @@
 {
   "name": "lugh-lang",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Lugh, the programming language for AI agents: check and dry-run programs where policy, budgets and human approval are part of the code. Includes an MCP server.",
   "mcpName": "io.github.Ashutosh3142857/lugh",
   "type": "module",

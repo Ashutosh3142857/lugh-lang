@@ -46,6 +46,10 @@ export function packFor(entry) {
   if (s.includes("github-mcp-server") || s.includes("server-github") || s.includes("githubcopilot.com/mcp")) return "github";
   if (s.includes("supabase")) return "supabase";
   if (s.includes("mcp.stripe.com") || s.includes("@stripe/mcp")) return "stripe";
+  if (s.includes("@playwright/mcp") || s.includes("playwright-mcp")) return "playwright";
+  if (s.includes("postgres-mcp") || s.includes("server-postgres") || s.includes("mcp-postgres") || s.includes("postgres-mcp-server")) return "postgres";
+  if (s.includes("slack")) return "slack";
+  if (s.includes("mcp.notion.com") || s.includes("notion-mcp-server")) return "notion";
   return "default";
 }
 

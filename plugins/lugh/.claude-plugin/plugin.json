@@ -1,7 +1,7 @@
 {
   "name": "lugh",
   "description": "Guard the MCP servers you already use with allow / ask / deny rules, budgets and an audit log (/lugh:protect), and a skill for writing, checking and dry-running agent programs whose permissions are part of the code.",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "author": {
     "name": "Ashutosh Pandey",
     "url": "https://github.com/Ashutosh3142857"

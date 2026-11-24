@@ -49,7 +49,7 @@ npx -y lugh-lang guard --policy filesystem -- npx -y @modelcontextprotocol/serve
 Each tool call gets an effect (from the server's annotations or your policy),
 then passes the gate: budgets, deny, allow, otherwise your client asks you.
 Refused calls never reach the server, and every decision goes to an audit log.
-Bundled policies: `default`, `filesystem`, `github`, `supabase`, `stripe`.
+Bundled policies: `default`, `filesystem`, `github`, `supabase`, `stripe`, `postgres`, `playwright`, `slack`, `notion`.
 `npx lugh-lang protect` does this for every server in your Claude Code, Claude
 Desktop, Cursor, VS Code and Windsurf configs at once (it asks first; `--undo`
 reverts). Details:

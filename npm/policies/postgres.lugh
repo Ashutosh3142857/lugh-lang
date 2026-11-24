@@ -1,0 +1,29 @@
+# Lugh guard policy for Postgres MCP servers
+#   npx -y lugh-lang guard --policy postgres -- uvx postgres-mcp --access-mode=unrestricted
+#   npx -y lugh-lang guard --policy postgres -- npx -y @modelcontextprotocol/server-postgres postgresql://localhost/mydb
+#
+# Plain reads run freely. SQL that drops, truncates or deletes is refused
+# before it reaches the database. Anything else that changes data or schema
+# asks first, and so does SQL this policy can't classify. Pattern rules are a
+# speed bump, not a parser: connect with a read-only role wherever writes are
+# not needed.
+agent PostgresGuard
+  budget calls 200
+  policy
+    allow read
+    ask human before write, execute, submit
+    deny delete
+  tools
+    "*" when sql matches "\b(drop|truncate|delete|revoke)\b" is delete
+    "*" when query matches "\b(drop|truncate|delete|revoke)\b" is delete
+    "*" when sql matches "\b(insert|update|merge|create|alter|grant|copy|vacuum|reindex|cluster|call|do|into|set|lock|refresh|comment|security|execute|prepare|listen|notify|pg_terminate_backend|pg_cancel_backend|lo_import|lo_export|dblink)\b" is write
+    "*" when query matches "\b(insert|update|merge|create|alter|grant|copy|vacuum|reindex|cluster|call|do|into|set|lock|refresh|comment|security|execute|prepare|listen|notify|pg_terminate_backend|pg_cancel_backend|lo_import|lo_export|dblink)\b" is write
+    "explain_query" when analyze matches "true" is execute
+    "execute_sql" when sql matches "^\s*(select|with|show|explain|table|values)\b" is read
+    "query" when sql matches "^\s*(select|with|show|explain|table|values)\b" is read
+    "execute_sql" is execute
+    "query" is execute
+    "explain_query" is read
+    "list_*" is read
+    "get_*" is read
+    "analyze_*" is read

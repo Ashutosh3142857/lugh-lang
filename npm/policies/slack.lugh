@@ -1,0 +1,36 @@
+# Lugh guard policy for Slack MCP servers (Slack's own server, korotovsky/slack-mcp-server,
+# and the older @modelcontextprotocol/server-slack)
+#   npx -y lugh-lang guard --policy slack -- npx -y @modelcontextprotocol/server-slack
+#
+# Reading channels, threads, users and search results runs freely. Every
+# message, reply or scheduled message asks first, so nothing is posted in
+# your name without you seeing it. Reactions, marking as read and saved items
+# run. Changing user groups and canvases asks. Deleting anything is refused.
+agent SlackGuard
+  budget calls 300
+  policy
+    allow read, write
+    ask human before send, submit
+    deny delete
+  tools
+    "*delete*" is delete
+    "*send_message*" is send
+    "*schedule_message*" is send
+    "*post_message*" is send
+    "*reply_to_thread*" is send
+    "*add_message*" is send
+    "*canvas*" is submit
+    "usergroups_create" is submit
+    "usergroups_update" is submit
+    "usergroups_users_update" is submit
+    "*reaction*" is write
+    "conversations_mark" is write
+    "saved_*" is write
+    "*list*" is read
+    "*get*" is read
+    "*search*" is read
+    "*read*" is read
+    "*history*" is read
+    "*replies*" is read
+    "*unreads*" is read
+    "usergroups_me" is read

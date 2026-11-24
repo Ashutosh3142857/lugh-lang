@@ -15,7 +15,7 @@ Use Lugh when an agent's actions must be reviewable before they run: a person ca
 
 - [Playground](https://ashutosh3142857.github.io/lugh-lang/): runs in the browser; adapters (fs, http, mcp, shell) act on a simulated world, behind the real policy gate. Open a program with `#code=<base64url>` and add `?run=1` to run it on load.
 - Check a program without installing: `npx lugh-lang run program.lugh` (also `test`, `check`, `sandbox`; `--decline` answers approvals with no). Exits 1 if a goal or test fails.
-- Guard an existing MCP server: `npx -y lugh-lang guard --policy <file|filesystem|github|supabase|stripe> -- <server command>` puts allow/ask/deny, budgets and an audit log in front of any stdio MCP server. See [docs/GUARD.md](https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/GUARD.md).
+- Guard an existing MCP server: `npx -y lugh-lang guard --policy <file|filesystem|github|supabase|stripe|postgres|playwright|slack|notion> -- <server command>` puts allow/ask/deny, budgets and an audit log in front of any stdio MCP server. See [docs/GUARD.md](https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/GUARD.md).
 - Guard every configured MCP server at once: `npx lugh-lang protect` (shows a plan, asks first, `--undo` reverts). Claude Code plugin: `/plugin install lugh --marketplace Ashutosh3142857/lugh-lang`.
 - MCP server: `npx -y lugh-lang mcp` (registry name `io.github.Ashutosh3142857/lugh`). Tools: `lugh_reference`, `lugh_check`, `lugh_run`, `lugh_test`, `lugh_sandbox`; all read-only, programs run in the sandbox. See [npm/README.md](https://github.com/Ashutosh3142857/lugh-lang/blob/main/npm/README.md).
 

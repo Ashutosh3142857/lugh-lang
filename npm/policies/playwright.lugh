@@ -1,0 +1,59 @@
+# Lugh guard policy for the Playwright MCP server (@playwright/mcp)
+#   npx -y lugh-lang guard --policy playwright -- npx -y @playwright/mcp@latest
+#
+# Browsing, reading pages and ordinary clicks and typing run freely, so the
+# agent can still get around a site. The moments that commit something ask
+# first: pressing Enter, typing with submit, and clicking anything that looks
+# like buy, pay, send, submit, confirm, delete or sign in. Uploading files
+# asks, and so does running JavaScript in the page or in the server. Clearing
+# cookies and storage is refused. Matching on button labels is a speed bump,
+# not a guarantee: keep the browser profile away from accounts that matter.
+agent PlaywrightGuard
+  budget calls 400
+  policy
+    allow read, write
+    ask human before submit, send, execute, spend
+    deny delete
+  tools
+    "browser_click" when element matches "\b(buy|pay|purchase|checkout|check out|order|subscribe|donate|transfer|send|submit|post|publish|confirm|approve|accept|agree|delete|remove|sign in|log in|login|sign up|register)\b" is submit
+    "browser_type" when submit matches "true" is submit
+    "browser_press_key" when key matches "^enter$" is submit
+    "browser_fill_form" when fields matches "password|card|cvc|cvv|iban|ssn" is submit
+    "browser_handle_dialog" when accept matches "true" is submit
+    "browser_file_upload" is send
+    "browser_evaluate" is execute
+    "browser_run_code*" is execute
+    "browser_route" is execute
+    "browser_cookie_clear" is delete
+    "browser_cookie_delete" is delete
+    "browser_localstorage_clear" is delete
+    "browser_localstorage_delete" is delete
+    "browser_sessionstorage_clear" is delete
+    "browser_sessionstorage_delete" is delete
+    "browser_cookie_set" is write
+    "browser_*storage_set" is write
+    "browser_set_storage_state" is write
+    "browser_click" is write
+    "browser_type" is write
+    "browser_fill_form" is write
+    "browser_select_option" is write
+    "browser_press_key" is write
+    "browser_drag" is write
+    "browser_drop" is write
+    "browser_mouse_*" is write
+    "browser_pdf_save" is write
+    "browser_navigate*" is read
+    "browser_snapshot" is read
+    "browser_take_screenshot" is read
+    "browser_console_messages" is read
+    "browser_network_request*" is read
+    "browser_wait_for" is read
+    "browser_tabs" is read
+    "browser_hover" is read
+    "browser_resize" is read
+    "browser_find" is read
+    "browser_close" is read
+    "browser_*_get" is read
+    "browser_*_list" is read
+    "browser_get_config" is read
+    "browser_verify_*" is read

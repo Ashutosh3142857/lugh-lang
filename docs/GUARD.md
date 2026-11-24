@@ -37,7 +37,7 @@ claude mcp add filesystem -- npx -y lugh-lang guard --policy filesystem -- npx -
 `npx lugh-lang protect` finds the MCP configs of Claude Code (user, local and
 project scopes), Claude Desktop, Cursor, VS Code and Windsurf, and wraps each
 local server in guard with a fitting pack: `filesystem`, `github`, `supabase`,
-`stripe`, or `default` for anything else (reads run; writes, sends, submits,
+`stripe`, `postgres`, `playwright`, `slack`, `notion`, or `default` for anything else (reads run; writes, sends, submits,
 spends and commands ask; deletes are refused).
 
 - It prints the plan and asks before writing; `--yes` skips the question.
@@ -107,6 +107,10 @@ Pass a name instead of a file:
 | `github` | `github/github-mcp-server` | Reads run; writes, comments, pushes and merges ask; deleting repos and files is refused |
 | `supabase` | Supabase MCP (via `mcp-remote`) | SQL that drops, truncates or deletes is refused; all other SQL, migrations, merges and deploys ask |
 | `stripe` | Stripe MCP (via `mcp-remote`) | Lookups run; every write and every money movement asks |
+| `postgres` | `postgres-mcp`, `@modelcontextprotocol/server-postgres` | Plain SELECTs run; SQL that drops, truncates or deletes is refused; anything else that changes data or schema asks |
+| `playwright` | `@playwright/mcp` | Browsing, reading, clicks and typing run; Enter, submit, and clicking buy/pay/send/confirm/sign in ask; uploads and page scripts ask; clearing cookies and storage is refused |
+| `slack` | Slack's MCP server, `slack-mcp-server`, `server-slack` | Reading runs; every message and reply asks; reactions run; deleting is refused |
+| `notion` | Notion MCP (via `mcp-remote`) | Search, fetch and queries run; creating, editing, moving and commenting ask; deleting pages, databases and comments is refused |
 | `default` | Any other server | Reads run; writes, sends, submits, spends and commands ask; deletes are refused |
 
 The packs live in [`npm/policies/`](../npm/policies). Copy one to start your own.

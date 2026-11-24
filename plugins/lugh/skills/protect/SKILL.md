@@ -6,7 +6,7 @@ description: Put every MCP server the user already has (Claude Code, Claude Desk
 # Protect the user's MCP servers
 
 `npx lugh-lang protect` finds the user's MCP configs and wraps each local server
-in Lugh guard with a fitting policy (filesystem, github, supabase, stripe, or a
+in Lugh guard with a fitting policy (filesystem, github, supabase, stripe, postgres, playwright, slack, notion, or a
 default that allows reads, asks before writes, sends, spends and commands, and
 refuses deletes). It changes only those server entries, backs each file up first,
 and can be undone.
