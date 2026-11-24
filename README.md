@@ -34,6 +34,8 @@ agent FlightScout
 
 ## Already using MCP servers? Guard them
 
+<p align="center"><img src="docs/img/how-it-works.gif" width="820" alt="Animation: an AI app makes three MCP tool calls through Lugh guard. list_tables is a read and runs. delete_rows is a delete, is denied and never reaches the production database. insert_rows is neither allowed nor denied, so guard asks the user, who allows it. Every decision is written to the audit log."></p>
+
 Put a Lugh policy in front of every MCP server you already use, with no rewrite.
 Reads run, risky actions ask you first, destructive ones never reach the server,
 and every decision is logged. One command does it for all your clients (Claude

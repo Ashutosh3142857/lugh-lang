@@ -6,6 +6,8 @@ Code, Cursor, VS Code, Claude Desktop) talks to the guard; the guard starts the
 real server and passes every message through, except that each tool call must
 clear the policy first.
 
+<p align="center"><img src="img/how-it-works.gif" width="820" alt="Lugh guard checking three MCP tool calls: a read runs, a delete is blocked before it reaches the database, and an insert waits for the user to allow it."></p>
+
 ```bash
 npx -y lugh-lang guard --policy github -- docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server
 ```

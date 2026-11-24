@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:960px;height:540px;background:#0f1715;font-family:"DejaVu Sans",Arial,sans-serif;color:#e8efe9;overflow:hidden;position:relative}
+.title{position:absolute;left:36px;top:24px;font-size:22px;font-weight:700;letter-spacing:.2px}
+.title span{color:#7fc4a4}
+.sub{position:absolute;left:36px;top:54px;font-size:14px;color:#9db3a8}
+.box{position:absolute;border-radius:14px;border:2px solid #34524a;background:#16231f}
+.lbl{font-size:13px;color:#9db3a8;text-transform:uppercase;letter-spacing:1px}
+.big{font-size:19px;font-weight:700;margin-top:4px}
+.small{font-size:12.5px;color:#9db3a8;margin-top:6px;line-height:1.4}
+#app{left:36px;top:92px;width:190px;height:262px;padding:16px}
+#srv{left:734px;top:92px;width:190px;height:262px;padding:16px}
+#guard{left:286px;top:92px;width:388px;height:262px;padding:14px 16px;border-color:#4f8f74;background:#132520}
+.check{display:flex;align-items:center;height:42px;margin-top:8px;border-radius:9px;background:#1b2e28;padding:0 12px;font-size:14.5px;border:2px solid transparent}
+.check .n{width:24px;height:24px;border-radius:50%;background:#2a4a40;color:#cfe;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin-right:10px;flex:none}
+.check .v{margin-left:auto;font-weight:700;font-size:13.5px}
+.on{border-color:#7fc4a4;background:#1f3a31}
+.ok{color:#7fe0a8}.bad{color:#ff7a6b}.ask{color:#ffc857}
+.arr{position:absolute;top:200px;width:52px;text-align:center;font-size:34px;font-weight:800;color:#34524a}
+.pill{position:absolute;height:32px;padding:0 12px;border-radius:16px;font-family:"DejaVu Sans Mono",monospace;font-size:13.5px;display:flex;align-items:center;font-weight:700;white-space:nowrap;box-shadow:0 2px 10px #0008}
+#log{position:absolute;left:36px;top:376px;width:888px;height:140px;border-radius:12px;background:#0a110f;border:2px solid #24382f;padding:12px 16px;font-family:"DejaVu Sans Mono",monospace;font-size:13.5px;line-height:1.75}
+#log .h{color:#6d8a7d;font-size:12px}
+#popup{position:absolute;left:540px;top:388px;width:360px;padding:14px 16px;border-radius:12px;background:#2b2412;border:2px solid #ffc857;font-size:14.5px;box-shadow:0 6px 30px #000a}
+#popup b{color:#ffc857}
+.btn{display:inline-block;margin-top:10px;padding:5px 16px;border-radius:7px;background:#ffc857;color:#2b2412;font-weight:700;font-size:13.5px}
+.btn2{background:transparent;color:#ffc857;border:1.5px solid #ffc857;margin-left:8px}
+#stamp{position:absolute;font-size:28px;font-weight:800}
+#cap{position:absolute;left:0;width:960px;top:228px;text-align:center;font-size:24px;font-weight:700}
+</style></head><body>
+<div class="title">How <span>Lugh guard</span> works</div>
+<div class="sub">It sits between your AI app and each MCP server and checks every tool call before it runs.</div>
+
+<div class="box" id="app"><div class="lbl">Your AI app</div><div class="big">Claude Code</div><div class="small">or Claude Desktop, Cursor, VS Code, Windsurf</div></div>
+
+<div class="box" id="guard"><div class="lbl" style="color:#7fc4a4">Lugh guard · your policy</div>
+ <div class="check" id="c1"><div class="n">1</div>What does it do?<div class="v" id="v1"></div></div>
+ <div class="check" id="c2"><div class="n">2</div>Within budget?<div class="v" id="v2"></div></div>
+ <div class="check" id="c3"><div class="n">3</div>Denied or allowed?<div class="v" id="v3"></div></div>
+ <div class="check" id="c4"><div class="n">4</div>Otherwise ask you<div class="v" id="v4"></div></div>
+</div>
+
+<div class="box" id="srv"><div class="lbl">MCP server</div><div class="big">Production DB</div><div class="small" id="srvs">users 1,284 rows<br>orders 5,310 rows</div></div>
+
+<div id="log"><div class="h">~/.lugh/guard-audit.jsonl</div><div id="lines"></div></div>
+<div class="pill" id="pa"></div><div class="pill" id="pg"></div><div class="pill" id="ps"></div>
+<div class="arr" id="a1" style="left:230px">→</div><div class="arr" id="a2" style="left:678px">→</div>
+<div id="popup" style="display:none">Agent wants to run <b>insert_rows</b> on <b>orders</b>.<br>Allow it?<br><span class="btn">Allow</span><span class="btn btn2">Deny</span></div>
+<div id="stamp"></div>
+
+<script>
+const scenes=[
+ {tool:'list_tables', eff:'read', res:'allow', log:'<span class="ok">✓ allow</span>  list_tables      effect=read     → ran'},
+ {tool:'delete_rows users', eff:'delete', res:'deny', log:'<span class="bad">✗ deny </span>  delete_rows      effect=delete   → blocked, never sent'},
+ {tool:'insert_rows orders', eff:'submit', res:'ask', log:'<span class="ask">? ask  </span>  insert_rows      effect=submit   → you allowed → ran'},
+];
+const D=5.2; // seconds per scene
+const $=id=>document.getElementById(id);
+function lerp(a,b,t){t=Math.max(0,Math.min(1,t));t=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;return a+(b-a)*t}
+function pill(id,txt,x,y,bg,fg){const e=$(id);if(!txt){e.style.display='none';return}e.style.display='flex';e.innerHTML=txt;e.style.left=x+'px';e.style.right='auto';e.style.top=y+'px';e.style.background=bg;e.style.color=fg||'#fff'}
+function render(T){
+ for(const i of [1,2,3,4]){$('c'+i).className='check';$('v'+i).textContent='';$('v'+i).className='v';$('c'+i).style.opacity=1}
+ $('popup').style.display='none';$('stamp').textContent='';$('cap').style.opacity=0;
+ $('a1').style.color=$('a2').style.color='#34524a';$('a2').textContent='→';
+ pill('pa');pill('pg');pill('ps');
+ $('srvs').innerHTML='users 1,284 rows<br>orders 5,310 rows';
+ const end=scenes.length*D;
+ if(T>=end){$('lines').innerHTML=scenes.map(s=>s.log).join('<br>');
+   ['c1','c2','c3','c4'].forEach(c=>$(c).style.opacity=.3);
+   $('srvs').innerHTML='users 1,284 rows<br>orders 5,311 rows<br><br><span class="ok">nothing deleted</span>';
+   $('cap').style.opacity=Math.min(1,(T-end)/0.6);return}
+ const k=Math.floor(T/D), t=T-k*D, s=scenes[k];
+ $('lines').innerHTML=scenes.slice(0,k).map(x=>x.log).join('<br>');
+ if(k>=2) $('srvs').innerHTML='users 1,284 rows<br>orders 5,310 rows';
+ const name=s.tool.split(' ')[0]+'()';
+ pill('pa','calls<br>'+s.tool.replace(' ','(')+(s.tool.includes(' ')?')':'()'),52,250,'#2f6f55');$('pa').style.height='auto';$('pa').style.padding='8px 12px';$('pa').style.lineHeight='1.35';$('pa').style.whiteSpace='normal';$('pa').style.width='158px';$('pa').style.fontSize='12px';$('pa').style.borderRadius='10px';
+ if(t>0.5) $('a1').style.color='#7fc4a4';
+ if(t>0.8){ pill('pg',name,0,104,'#2f6f55'); $('pg').style.left='auto';$('pg').style.right='300px';}
+ const v=(i,txt,c)=>{$('c'+i).classList.add('on');$('v'+i).textContent=txt;$('v'+i).classList.add(c)};
+ if(t>1.1) v(1,s.eff,s.eff=='read'?'ok':s.eff=='delete'?'bad':'ask');
+ if(t>1.6) v(2,'yes','ok');
+ if(t>2.1){ if(s.res=='allow')v(3,'allowed','ok'); else if(s.res=='deny')v(3,'denied','bad'); else v(3,'neither','ask'); }
+ if(s.res=='ask' && t>2.6){ v(4,'asking you','ask'); if(t<3.7)$('popup').style.display='block'; else {$('v4').textContent='you allowed';$('v4').className='v ok'} }
+ const go = s.res=='allow' ? 2.6 : s.res=='ask' ? 3.8 : 99;
+ if(s.res=='deny' && t>2.5){ $('a2').textContent='✗';$('a2').style.color='#ff7a6b';pill('pg',name+' ✗',0,104,'#7a2a22');$('pg').style.left='auto';$('pg').style.right='300px';
+   pill('ps','received nothing',752,250,'#1f3a31','#7fe0a8'); $('ps').style.fontSize='12.5px'}
+ if(t>go){ $('a2').style.color='#7fc4a4'; if(t>go+0.4){ pill('ps','✓ ran '+name,752,250,'#1f3a31','#7fe0a8');$('ps').style.fontSize='12.5px';
+   if(s.res=='ask') $('srvs').innerHTML='users 1,284 rows<br>orders 5,311 rows'; } }
+ if(t>D-0.4) $('lines').innerHTML=scenes.slice(0,k+1).map(x=>x.log).join('<br>');
+}
+window.render=render;window.TOTAL=scenes.length*D+3;
+</script>
+<div id="cap" style="opacity:0;top:270px;left:150px;width:660px;padding:18px;border-radius:14px;background:#0f1715f0;border:2px solid #4f8f74;font-size:20px;color:#e8efe9;text-shadow:0 2px 12px #000">Reads run · risky calls ask you · destructive calls never reach the server</div>
+</body></html>

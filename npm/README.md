@@ -38,6 +38,8 @@ person the policy log before anything runs for real.
 
 ## Guard mode: a policy in front of any MCP server
 
+<img src="https://raw.githubusercontent.com/Ashutosh3142857/lugh-lang/main/docs/img/how-it-works.gif" width="820" alt="Lugh guard checking three MCP tool calls: a read runs, a delete is blocked, an insert asks the user first.">
+
 Keep the MCP servers you already use and put Lugh's policy gate in front of them:
 
 ```bash
