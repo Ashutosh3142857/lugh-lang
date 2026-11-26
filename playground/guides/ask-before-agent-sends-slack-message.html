@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Make an AI agent ask before it sends a Slack message · Lugh</title>
+<meta name="description" content="Slack MCP servers let an agent post in your name. Keep reading free and make every message, reply and scheduled message wait for your yes.">
+<link rel="canonical" href="https://ashutosh3142857.github.io/lugh-lang/guides/ask-before-agent-sends-slack-message.html">
+<meta property="og:title" content="Make an AI agent ask before it sends a Slack message · Lugh">
+<meta property="og:description" content="Slack MCP servers let an agent post in your name. Keep reading free and make every message, reply and scheduled message wait for your yes.">
+<meta property="og:url" content="https://ashutosh3142857.github.io/lugh-lang/guides/ask-before-agent-sends-slack-message.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://raw.githubusercontent.com/Ashutosh3142857/lugh-lang/main/docs/img/how-it-works.gif">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "Make an AI agent ask before it sends a Slack message", "description": "Slack MCP servers let an agent post in your name. Keep reading free and make every message, reply and scheduled message wait for your yes.", "url": "https://ashutosh3142857.github.io/lugh-lang/guides/ask-before-agent-sends-slack-message.html", "author": {"@type": "Organization", "name": "Lugh"}}</script>
+<style>
+:root{--bg:#fbfbf9;--ink:#1d1d1b;--muted:#64645e;--line:#e4e3dc;--code:#f1f0ea;--accent:#2f6f55}
+@media (prefers-color-scheme:dark){:root{--bg:#121211;--ink:#ecebe6;--muted:#9a9993;--line:#2c2c29;--code:#1d1d1b;--accent:#7fc4a4}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.65 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:760px;margin:0 auto;padding:28px 20px 64px}
+nav{font-size:14px;color:var(--muted);margin-bottom:28px}nav a{color:var(--muted)}
+h1{font-size:30px;line-height:1.25;margin:0 0 18px}h2{font-size:21px;margin:36px 0 10px}
+a{color:var(--accent)}code{font:14.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--code);padding:1px 5px;border-radius:5px}
+pre{background:var(--code);padding:14px 16px;border-radius:10px;overflow-x:auto}pre code{padding:0;background:none}
+table{border-collapse:collapse;width:100%;font-size:15px;margin:12px 0}th,td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+.cta{margin-top:40px;padding:18px 20px;border:1px solid var(--line);border-radius:12px;font-size:15.5px}
+.list a{display:block;padding:14px 0;border-bottom:1px solid var(--line);text-decoration:none;color:var(--ink)}.list a b{color:var(--accent)}.list a span{display:block;color:var(--muted);font-size:15px}
+footer{margin-top:48px;font-size:13px;color:var(--muted)}
+</style></head>
+<body><main>
+<nav><a href="https://ashutosh3142857.github.io/lugh-lang/">Lugh</a> · <a href="https://ashutosh3142857.github.io/lugh-lang/guides/">Guides</a> · <a href="https://github.com/Ashutosh3142857/lugh-lang">GitHub</a></nav>
+<h1>Make an AI agent ask before it sends a Slack message</h1>
+<p>A Slack MCP server is great for "summarise what I missed in #eng". The same server also has a tool that posts messages as you. An agent that misreads a thread, or that reads a message containing instructions aimed at it, can reply to a customer channel before you notice.</p>
+<p>The rule most people actually want is simple: <strong>read anything, send nothing without asking.</strong></p>
+<h2>Set it up</h2>
+<pre><code class="language-bash">npx lugh-lang protect
+</code></pre>
+<p><code>protect</code> finds your Slack MCP server (Slack's own, <code>korotovsky/slack-mcp-server</code>, or the older <code>@modelcontextprotocol/server-slack</code>) in Claude Code, Cursor, VS Code, Claude Desktop or Windsurf and wraps it with the <code>slack</code> policy. It shows the change first and <code>--undo</code> reverts it.</p>
+<p>Or wrap one server by hand:</p>
+<pre><code class="language-bash">npx -y lugh-lang guard --policy slack -- npx -y @modelcontextprotocol/server-slack
+</code></pre>
+<h2>What the <code>slack</code> policy does</h2>
+<table>
+<thead>
+<tr>
+<th>Tool calls</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>list channels, read history and threads, search, look up users</td>
+<td>run</td>
+</tr>
+<tr>
+<td>send a message, reply in a thread, schedule a message</td>
+<td>ask you first</td>
+</tr>
+<tr>
+<td>add or remove a reaction, mark as read</td>
+<td>run</td>
+</tr>
+<tr>
+<td>create or update canvases and user groups</td>
+<td>ask you first</td>
+</tr>
+<tr>
+<td>anything with "delete" in the name</td>
+<td>refused</td>
+</tr>
+</tbody>
+</table>
+<p>"Ask" uses your client's own approval prompt (MCP elicitation) where the client supports it. Where it doesn't, the call is held back and the agent is told it needs approval, so nothing is sent silently.</p>
+<p>Every decision, including the ones you approved, is written to <code>~/.lugh/guard-audit.jsonl</code>.</p>
+<h2>Tighten or loosen it</h2>
+<p>The policy is a few lines of text. To let the agent post freely in one channel but ask everywhere else:</p>
+<pre><code class="language-lugh">  tools
+    &quot;*post_message*&quot; when channel_id matches &quot;^C0123ABCD$&quot; is write
+    &quot;*post_message*&quot; is send
+</code></pre>
+<p>Put the specific rule first; the first match wins. Save it as <code>slack.lugh</code> and use <code>--policy ./slack.lugh</code>.</p><div class="cta"><b>Try it:</b> <code>npx lugh-lang protect</code> wraps every MCP server in your
+Claude Code, Cursor, VS Code, Claude Desktop and Windsurf configs, shows the change first, and
+<code>--undo</code> reverts it. <a href="https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/GUARD.md">How guard works</a>.</div>
+<footer>Lugh is MIT licensed. <a href="https://github.com/Ashutosh3142857/lugh-lang">Source, issues and docs on GitHub</a>.</footer>
+</main></body></html>

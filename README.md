@@ -77,6 +77,11 @@ claude mcp add github -- npx -y lugh-lang guard --policy github -- docker run -i
 Ready-made policies ship for the `filesystem`, `github`, `supabase`, `stripe`,
 `postgres`, `playwright`, `slack` and `notion` servers, and you can write your own in a few lines. See [guard mode](docs/GUARD.md).
 
+Guides: [stop `DROP TABLE` through an MCP server](https://ashutosh3142857.github.io/lugh-lang/guides/stop-ai-agent-dropping-database.html) ·
+[ask before an agent sends a Slack message](https://ashutosh3142857.github.io/lugh-lang/guides/ask-before-agent-sends-slack-message.html) ·
+[stop a browser agent clicking "Buy"](https://ashutosh3142857.github.io/lugh-lang/guides/stop-browser-agent-clicking-buy.html) ·
+[log every MCP tool call](https://ashutosh3142857.github.io/lugh-lang/guides/log-every-mcp-tool-call.html)
+
 In Claude Code, the Lugh plugin adds two skills, `/lugh:protect` and the Lugh
 workflow, in one step (add `lugh-mcp` for the MCP server too):
 
@@ -335,6 +340,7 @@ An adapter is one class: a map of `verb → effect` and a `call(verb, args)` met
 
 ## Documentation
 
+- [Guides](https://ashutosh3142857.github.io/lugh-lang/guides/): practical fixes for keeping MCP agents in bounds
 - [Language specification](docs/SPEC.md)
 - [From research to runtime](docs/RESEARCH.md): how 30 foundational papers map to Lugh
 - [MCP and `lugh plan`](docs/MCP.md): connecting to MCP servers; letting a model write programs you approve

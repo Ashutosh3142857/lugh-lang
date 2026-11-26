@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stop a browser agent from clicking &quot;Buy&quot; or &quot;Pay&quot; · Lugh</title>
+<meta name="description" content="Playwright MCP gives an AI agent a real browser. Let it browse, click and type, but make it ask before it submits, pays, sends, signs in or uploads.">
+<link rel="canonical" href="https://ashutosh3142857.github.io/lugh-lang/guides/stop-browser-agent-clicking-buy.html">
+<meta property="og:title" content="Stop a browser agent from clicking &quot;Buy&quot; or &quot;Pay&quot; · Lugh">
+<meta property="og:description" content="Playwright MCP gives an AI agent a real browser. Let it browse, click and type, but make it ask before it submits, pays, sends, signs in or uploads.">
+<meta property="og:url" content="https://ashutosh3142857.github.io/lugh-lang/guides/stop-browser-agent-clicking-buy.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://raw.githubusercontent.com/Ashutosh3142857/lugh-lang/main/docs/img/how-it-works.gif">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "Stop a browser agent from clicking \"Buy\" or \"Pay\"", "description": "Playwright MCP gives an AI agent a real browser. Let it browse, click and type, but make it ask before it submits, pays, sends, signs in or uploads.", "url": "https://ashutosh3142857.github.io/lugh-lang/guides/stop-browser-agent-clicking-buy.html", "author": {"@type": "Organization", "name": "Lugh"}}</script>
+<style>
+:root{--bg:#fbfbf9;--ink:#1d1d1b;--muted:#64645e;--line:#e4e3dc;--code:#f1f0ea;--accent:#2f6f55}
+@media (prefers-color-scheme:dark){:root{--bg:#121211;--ink:#ecebe6;--muted:#9a9993;--line:#2c2c29;--code:#1d1d1b;--accent:#7fc4a4}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.65 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:760px;margin:0 auto;padding:28px 20px 64px}
+nav{font-size:14px;color:var(--muted);margin-bottom:28px}nav a{color:var(--muted)}
+h1{font-size:30px;line-height:1.25;margin:0 0 18px}h2{font-size:21px;margin:36px 0 10px}
+a{color:var(--accent)}code{font:14.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--code);padding:1px 5px;border-radius:5px}
+pre{background:var(--code);padding:14px 16px;border-radius:10px;overflow-x:auto}pre code{padding:0;background:none}
+table{border-collapse:collapse;width:100%;font-size:15px;margin:12px 0}th,td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+.cta{margin-top:40px;padding:18px 20px;border:1px solid var(--line);border-radius:12px;font-size:15.5px}
+.list a{display:block;padding:14px 0;border-bottom:1px solid var(--line);text-decoration:none;color:var(--ink)}.list a b{color:var(--accent)}.list a span{display:block;color:var(--muted);font-size:15px}
+footer{margin-top:48px;font-size:13px;color:var(--muted)}
+</style></head>
+<body><main>
+<nav><a href="https://ashutosh3142857.github.io/lugh-lang/">Lugh</a> · <a href="https://ashutosh3142857.github.io/lugh-lang/guides/">Guides</a> · <a href="https://github.com/Ashutosh3142857/lugh-lang">GitHub</a></nav>
+<h1>Stop a browser agent from clicking "Buy" or "Pay"</h1>
+<p>With the Playwright MCP server an agent can drive a real browser: open pages, click, type, fill forms. That's what makes it useful, and it's also what makes it risky. The click that opens a product page and the click that places the order are the same tool call, <code>browser_click</code>.</p>
+<p>Asking before every click makes the agent useless. Asking before none makes it dangerous. The useful middle is to ask before the clicks that commit something.</p>
+<h2>Set it up</h2>
+<pre><code class="language-bash">npx lugh-lang protect
+</code></pre>
+<p><code>protect</code> finds <code>@playwright/mcp</code> in your Claude Code, Cursor, VS Code, Claude Desktop or Windsurf config and wraps it with the <code>playwright</code> policy. Or by hand:</p>
+<pre><code class="language-bash">npx -y lugh-lang guard --policy playwright -- npx -y @playwright/mcp@latest
+</code></pre>
+<h2>What the <code>playwright</code> policy does</h2>
+<table>
+<thead>
+<tr>
+<th>The agent</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>navigates, takes snapshots and screenshots, reads console and network</td>
+<td>runs</td>
+</tr>
+<tr>
+<td>clicks, types, selects, hovers, drags</td>
+<td>runs</td>
+</tr>
+<tr>
+<td>clicks an element whose label says buy, pay, purchase, checkout, order, subscribe, donate, transfer, send, submit, post, publish, confirm, approve, accept, agree, delete, remove, sign in, log in, sign up or register</td>
+<td>asks you</td>
+</tr>
+<tr>
+<td>types with <code>submit: true</code>, or presses Enter</td>
+<td>asks you</td>
+</tr>
+<tr>
+<td>fills a form that includes password or card fields</td>
+<td>asks you</td>
+</tr>
+<tr>
+<td>accepts a browser dialog</td>
+<td>asks you</td>
+</tr>
+<tr>
+<td>uploads a file</td>
+<td>asks you</td>
+</tr>
+<tr>
+<td>runs JavaScript in the page</td>
+<td>asks you</td>
+</tr>
+<tr>
+<td>clears cookies or storage</td>
+<td>refused</td>
+</tr>
+</tbody>
+</table>
+<p>Every decision is logged to <code>~/.lugh/guard-audit.jsonl</code>.</p>
+<h2>Why matching on labels works, and where it doesn't</h2>
+<p>Playwright's click tool includes a human-readable description of the element the model is clicking, like "Place order button". Guard matches on that. It catches the common case well, and a model that's trying to complete a purchase will describe the button honestly because that's how it finds it.</p>
+<p>It is still a speed bump, not a guarantee. A button labelled "Continue" can complete a checkout. So keep the agent's browser profile signed out of accounts that can spend money, and treat the label rules as a second line.</p><div class="cta"><b>Try it:</b> <code>npx lugh-lang protect</code> wraps every MCP server in your
+Claude Code, Cursor, VS Code, Claude Desktop and Windsurf configs, shows the change first, and
+<code>--undo</code> reverts it. <a href="https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/GUARD.md">How guard works</a>.</div>
+<footer>Lugh is MIT licensed. <a href="https://github.com/Ashutosh3142857/lugh-lang">Source, issues and docs on GitHub</a>.</footer>
+</main></body></html>

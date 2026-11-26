@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stop Claude Code or Cursor from running DROP TABLE through an MCP server · Lugh</title>
+<meta name="description" content="An AI coding agent with a Postgres or Supabase MCP server can run any SQL it decides to. Here is how to let it read freely while DROP, TRUNCATE and DELETE never reach the database.">
+<link rel="canonical" href="https://ashutosh3142857.github.io/lugh-lang/guides/stop-ai-agent-dropping-database.html">
+<meta property="og:title" content="Stop Claude Code or Cursor from running DROP TABLE through an MCP server · Lugh">
+<meta property="og:description" content="An AI coding agent with a Postgres or Supabase MCP server can run any SQL it decides to. Here is how to let it read freely while DROP, TRUNCATE and DELETE never reach the database.">
+<meta property="og:url" content="https://ashutosh3142857.github.io/lugh-lang/guides/stop-ai-agent-dropping-database.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://raw.githubusercontent.com/Ashutosh3142857/lugh-lang/main/docs/img/how-it-works.gif">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "Stop Claude Code or Cursor from running DROP TABLE through an MCP server", "description": "An AI coding agent with a Postgres or Supabase MCP server can run any SQL it decides to. Here is how to let it read freely while DROP, TRUNCATE and DELETE never reach the database.", "url": "https://ashutosh3142857.github.io/lugh-lang/guides/stop-ai-agent-dropping-database.html", "author": {"@type": "Organization", "name": "Lugh"}}</script>
+<style>
+:root{--bg:#fbfbf9;--ink:#1d1d1b;--muted:#64645e;--line:#e4e3dc;--code:#f1f0ea;--accent:#2f6f55}
+@media (prefers-color-scheme:dark){:root{--bg:#121211;--ink:#ecebe6;--muted:#9a9993;--line:#2c2c29;--code:#1d1d1b;--accent:#7fc4a4}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.65 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:760px;margin:0 auto;padding:28px 20px 64px}
+nav{font-size:14px;color:var(--muted);margin-bottom:28px}nav a{color:var(--muted)}
+h1{font-size:30px;line-height:1.25;margin:0 0 18px}h2{font-size:21px;margin:36px 0 10px}
+a{color:var(--accent)}code{font:14.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--code);padding:1px 5px;border-radius:5px}
+pre{background:var(--code);padding:14px 16px;border-radius:10px;overflow-x:auto}pre code{padding:0;background:none}
+table{border-collapse:collapse;width:100%;font-size:15px;margin:12px 0}th,td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+.cta{margin-top:40px;padding:18px 20px;border:1px solid var(--line);border-radius:12px;font-size:15.5px}
+.list a{display:block;padding:14px 0;border-bottom:1px solid var(--line);text-decoration:none;color:var(--ink)}.list a b{color:var(--accent)}.list a span{display:block;color:var(--muted);font-size:15px}
+footer{margin-top:48px;font-size:13px;color:var(--muted)}
+</style></head>
+<body><main>
+<nav><a href="https://ashutosh3142857.github.io/lugh-lang/">Lugh</a> · <a href="https://ashutosh3142857.github.io/lugh-lang/guides/">Guides</a> · <a href="https://github.com/Ashutosh3142857/lugh-lang">GitHub</a></nav>
+<h1>Stop Claude Code or Cursor from running <code>DROP TABLE</code> through an MCP server</h1>
+<p>Connect a database MCP server to Claude Code, Cursor or VS Code and the agent gets a tool like <code>execute_sql</code> or <code>query</code>. That tool runs whatever SQL the model writes. Most of the time it's a harmless <code>SELECT</code>. Sometimes it's <code>DELETE FROM users</code> because the model misread a task, followed an instruction hidden in a web page, or decided a table looked like test data.</p>
+<p>Client approval prompts help, but people click "always allow" after the tenth harmless query. After that nothing stands between the model and your data.</p>
+<h2>The fix: put a policy in front of the server</h2>
+<p><a href="https://github.com/Ashutosh3142857/lugh-lang">Lugh guard</a> sits between your AI client and the MCP server. It reads every tool call, decides what it does, and only then lets it through. For SQL it looks at the statement itself:</p>
+<table>
+<thead>
+<tr>
+<th>The agent sends</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SELECT</code>, <code>WITH … SELECT</code>, <code>SHOW</code>, <code>EXPLAIN</code></td>
+<td>runs</td>
+</tr>
+<tr>
+<td><code>DROP</code>, <code>TRUNCATE</code>, <code>DELETE</code>, <code>REVOKE</code> (anywhere in the statement, including inside a CTE)</td>
+<td>refused; the server never receives it</td>
+</tr>
+<tr>
+<td><code>INSERT</code>, <code>UPDATE</code>, <code>ALTER</code>, <code>CREATE</code>, <code>GRANT</code>, …</td>
+<td>your client asks you first</td>
+</tr>
+<tr>
+<td>anything it can't classify</td>
+<td>asks you first</td>
+</tr>
+</tbody>
+</table>
+<h2>Set it up in one command</h2>
+<pre><code class="language-bash">npx lugh-lang protect
+</code></pre>
+<p><code>protect</code> finds the MCP servers in your Claude Code, Claude Desktop, Cursor, VS Code and Windsurf configs, shows you what it will change, and wraps each local server. A Postgres server gets the <code>postgres</code> policy, Supabase gets <code>supabase</code>. It keeps a backup next to each file, and <code>npx lugh-lang protect --undo</code> puts everything back.</p>
+<p>Your config entry ends up looking like this:</p>
+<pre><code class="language-json">&quot;postgres&quot;: {
+  &quot;command&quot;: &quot;npx&quot;,
+  &quot;args&quot;: [&quot;-y&quot;, &quot;lugh-lang&quot;, &quot;guard&quot;, &quot;--policy&quot;, &quot;postgres&quot;, &quot;--&quot;,
+           &quot;uvx&quot;, &quot;postgres-mcp&quot;, &quot;--access-mode=unrestricted&quot;]
+}
+</code></pre>
+<p>Restart the client. Nothing else changes: same server, same tools, same connection string.</p>
+<h2>What the agent sees</h2>
+<p>When the model tries <code>DROP TABLE orders</code>, the call comes back as an error saying the policy denied it. The model usually adapts and explains that it can't do that. The database never saw the statement, so there's nothing to roll back.</p>
+<p>Every decision is appended to <code>~/.lugh/guard-audit.jsonl</code>, one JSON line per call, so you can see afterwards what the agent tried.</p>
+<h2>Write your own rules</h2>
+<p>The bundled policy is a short text file. Copy it and change what you need:</p>
+<pre><code class="language-lugh">agent PostgresGuard
+  budget calls 200
+  policy
+    allow read
+    ask human before write, execute, submit
+    deny delete
+  tools
+    &quot;execute_sql&quot; when sql matches &quot;\b(drop|truncate|delete|revoke)\b&quot; is delete
+    &quot;execute_sql&quot; when sql matches &quot;^\s*(select|with|show|explain)\b&quot; is read
+    &quot;execute_sql&quot; is execute
+</code></pre>
+<p>Then point guard at it: <code>--policy ./my-db.lugh</code>.</p>
+<h2>Limits worth knowing</h2>
+<p>Pattern matching on SQL is a strong speed bump, not a SQL parser. It errs on the side of asking: a column named <code>comment</code> or <code>set</code> in a <code>SELECT</code> will trigger a prompt. For anything that matters, also connect with a database role that can't write where writes aren't needed. Guard and a read-only role together cover both the honest mistake and the clever one.</p><div class="cta"><b>Try it:</b> <code>npx lugh-lang protect</code> wraps every MCP server in your
+Claude Code, Cursor, VS Code, Claude Desktop and Windsurf configs, shows the change first, and
+<code>--undo</code> reverts it. <a href="https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/GUARD.md">How guard works</a>.</div>
+<footer>Lugh is MIT licensed. <a href="https://github.com/Ashutosh3142857/lugh-lang">Source, issues and docs on GitHub</a>.</footer>
+</main></body></html>

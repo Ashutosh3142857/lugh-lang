@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Log every MCP tool call your AI agent makes · Lugh</title>
+<meta name="description" content="Get a plain JSONL audit log of every tool call Claude Code, Cursor or VS Code makes through MCP, including the ones that were refused or that you approved.">
+<link rel="canonical" href="https://ashutosh3142857.github.io/lugh-lang/guides/log-every-mcp-tool-call.html">
+<meta property="og:title" content="Log every MCP tool call your AI agent makes · Lugh">
+<meta property="og:description" content="Get a plain JSONL audit log of every tool call Claude Code, Cursor or VS Code makes through MCP, including the ones that were refused or that you approved.">
+<meta property="og:url" content="https://ashutosh3142857.github.io/lugh-lang/guides/log-every-mcp-tool-call.html">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://raw.githubusercontent.com/Ashutosh3142857/lugh-lang/main/docs/img/how-it-works.gif">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "Log every MCP tool call your AI agent makes", "description": "Get a plain JSONL audit log of every tool call Claude Code, Cursor or VS Code makes through MCP, including the ones that were refused or that you approved.", "url": "https://ashutosh3142857.github.io/lugh-lang/guides/log-every-mcp-tool-call.html", "author": {"@type": "Organization", "name": "Lugh"}}</script>
+<style>
+:root{--bg:#fbfbf9;--ink:#1d1d1b;--muted:#64645e;--line:#e4e3dc;--code:#f1f0ea;--accent:#2f6f55}
+@media (prefers-color-scheme:dark){:root{--bg:#121211;--ink:#ecebe6;--muted:#9a9993;--line:#2c2c29;--code:#1d1d1b;--accent:#7fc4a4}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.65 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:760px;margin:0 auto;padding:28px 20px 64px}
+nav{font-size:14px;color:var(--muted);margin-bottom:28px}nav a{color:var(--muted)}
+h1{font-size:30px;line-height:1.25;margin:0 0 18px}h2{font-size:21px;margin:36px 0 10px}
+a{color:var(--accent)}code{font:14.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--code);padding:1px 5px;border-radius:5px}
+pre{background:var(--code);padding:14px 16px;border-radius:10px;overflow-x:auto}pre code{padding:0;background:none}
+table{border-collapse:collapse;width:100%;font-size:15px;margin:12px 0}th,td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+.cta{margin-top:40px;padding:18px 20px;border:1px solid var(--line);border-radius:12px;font-size:15.5px}
+.list a{display:block;padding:14px 0;border-bottom:1px solid var(--line);text-decoration:none;color:var(--ink)}.list a b{color:var(--accent)}.list a span{display:block;color:var(--muted);font-size:15px}
+footer{margin-top:48px;font-size:13px;color:var(--muted)}
+</style></head>
+<body><main>
+<nav><a href="https://ashutosh3142857.github.io/lugh-lang/">Lugh</a> · <a href="https://ashutosh3142857.github.io/lugh-lang/guides/">Guides</a> · <a href="https://github.com/Ashutosh3142857/lugh-lang">GitHub</a></nav>
+<h1>Log every MCP tool call your AI agent makes</h1>
+<p>After an agent session it's surprisingly hard to answer "what did it actually do?". The chat shows what the model said. The tool calls are folded away, scattered across clients, and gone when the session ends.</p>
+<p><a href="https://github.com/Ashutosh3142857/lugh-lang">Lugh guard</a> sits in front of each MCP server and writes one JSON line per decision to a single file, for every client and every server.</p>
+<h2>Set it up</h2>
+<pre><code class="language-bash">npx lugh-lang protect
+</code></pre>
+<p>That wraps every local MCP server in your Claude Code, Claude Desktop, Cursor, VS Code and Windsurf configs with a fitting policy, and logs every call.</p>
+<p>If you want the log without any extra prompts or refusals, save this as <code>log-only.lugh</code>:</p>
+<pre><code class="language-lugh">agent LogOnly
+  policy
+    allow read, write, send, submit, spend, delete, execute
+</code></pre>
+<p>and wrap a server with it:</p>
+<pre><code class="language-bash">npx -y lugh-lang guard --policy ./log-only.lugh -- &lt;your server command&gt;
+</code></pre>
+<h2>What the log looks like</h2>
+<p>By default the log is <code>~/.lugh/guard-audit.jsonl</code> (change it with <code>--audit &lt;file&gt;</code>). Each line is one event:</p>
+<pre><code class="language-json">{&quot;t&quot;:1795702050.6,&quot;agent&quot;:&quot;PostgresGuard&quot;,&quot;kind&quot;:&quot;effect&quot;,&quot;effect&quot;:&quot;read&quot;,&quot;action&quot;:&quot;execute_sql&quot;}
+{&quot;t&quot;:1795702061.2,&quot;agent&quot;:&quot;PostgresGuard&quot;,&quot;kind&quot;:&quot;denied&quot;,&quot;effect&quot;:&quot;delete&quot;,&quot;action&quot;:&quot;execute_sql&quot;}
+{&quot;t&quot;:1795702090.9,&quot;agent&quot;:&quot;PostgresGuard&quot;,&quot;kind&quot;:&quot;human&quot;,&quot;effect&quot;:&quot;write&quot;,&quot;action&quot;:&quot;execute_sql&quot;,&quot;answer&quot;:&quot;yes&quot;}
+</code></pre>
+<p>The kinds are <code>start</code>, <code>effect</code> (the call went through), <code>denied</code>, <code>human</code> (you were asked, with your answer), <code>held</code> (approval needed but the client can't ask), <code>budget</code> (a time or call budget ran out) and <code>server_exit</code>.</p>
+<h2>Useful one-liners</h2>
+<pre><code class="language-bash"># everything that was refused
+grep '&quot;kind&quot;:&quot;denied&quot;' ~/.lugh/guard-audit.jsonl
+
+# what you approved
+grep '&quot;kind&quot;:&quot;human&quot;' ~/.lugh/guard-audit.jsonl | grep '&quot;answer&quot;:&quot;yes&quot;'
+
+# calls per tool
+jq -r 'select(.kind==&quot;effect&quot;) | .action' ~/.lugh/guard-audit.jsonl | sort | uniq -c | sort -rn
+</code></pre>
+<p>Because it's plain JSONL you can ship it anywhere: tail it into your log stack, or attach it to an incident review.</p><div class="cta"><b>Try it:</b> <code>npx lugh-lang protect</code> wraps every MCP server in your
+Claude Code, Cursor, VS Code, Claude Desktop and Windsurf configs, shows the change first, and
+<code>--undo</code> reverts it. <a href="https://github.com/Ashutosh3142857/lugh-lang/blob/main/docs/GUARD.md">How guard works</a>.</div>
+<footer>Lugh is MIT licensed. <a href="https://github.com/Ashutosh3142857/lugh-lang">Source, issues and docs on GitHub</a>.</footer>
+</main></body></html>
