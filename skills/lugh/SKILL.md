@@ -15,10 +15,8 @@ not only what it should do.
 
 Use whichever is available, in this order:
 
-1. **MCP server** (`lugh` in the client's MCP list): `lugh_reference`,
-   `lugh_check`, `lugh_run`, `lugh_test`, `lugh_sandbox`.
-   To add it: `npx -y lugh-lang mcp` as a stdio server, or
-   `claude mcp add lugh -- npx -y lugh-lang mcp` in Claude Code.
+1. **Lugh MCP tools**, if the client already lists a `lugh` server:
+   `lugh_reference`, `lugh_check`, `lugh_run`, `lugh_test`, `lugh_sandbox`.
 2. **Command line, no install:** `npx lugh-lang run|test|check program.lugh`,
    `npx lugh-lang sandbox`.
 3. **Browser:** https://ashutosh3142857.github.io/lugh-lang/ (share a program as a link).

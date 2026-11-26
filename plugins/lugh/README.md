@@ -22,9 +22,8 @@ agent programs written in [Lugh](https://github.com/Ashutosh3142857/lugh-lang).
 
 Needs Node.js 18 or later (protect runs through `npx`).
 
-For the Lugh MCP server (check and dry-run programs from Claude), also install
-`lugh-mcp` from the same marketplace, or run
-`claude mcp add lugh -- npx -y lugh-lang mcp`.
+The skills use the `npx lugh-lang` command line, so nothing else needs to be
+installed.
 
 ## Links
 
