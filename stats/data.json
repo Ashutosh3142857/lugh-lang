@@ -59,6 +59,12 @@
    "forks": 0,
    "watchers": 0,
    "open_issues": 0
+  },
+  "2026-11-27": {
+   "stars": 1,
+   "forks": 0,
+   "watchers": 0,
+   "open_issues": 0
   }
  },
  "crates": {
@@ -76,7 +82,7 @@
   "v0.7.1": 1,
   "v0.7.0": 1
  },
- "updated": "2026-11-26 11:28 UTC",
+ "updated": "2026-11-27 11:24 UTC",
  "views": {
   "2026-11-03": {
    "count": 0,
@@ -169,6 +175,10 @@
   "2026-11-25": {
    "count": 1,
    "uniques": 1
+  },
+  "2026-11-26": {
+   "count": 8,
+   "uniques": 2
   }
  },
  "clones": {
@@ -263,15 +273,24 @@
   "2026-11-25": {
    "count": 53,
    "uniques": 17
+  },
+  "2026-11-26": {
+   "count": 47,
+   "uniques": 22
   }
  },
  "referrers": {
-  "as_of": "2026-11-26",
+  "as_of": "2026-11-27",
   "items": [
    {
     "referrer": "github.com",
-    "count": 4,
+    "count": 7,
     "uniques": 2
+   },
+   {
+    "referrer": "ashutosh3142857.github.io",
+    "count": 1,
+    "uniques": 1
    }
   ]
  },
@@ -314,18 +333,19 @@
   "2026-11-22": 17,
   "2026-11-23": 11,
   "2026-11-24": 10,
-  "2026-11-25": 17
+  "2026-11-25": 17,
+  "2026-11-26": 197
  },
  "traffic_14d": {
   "views": {
-   "count": 84,
-   "uniques": 27,
-   "as_of": "2026-11-26"
+   "count": 92,
+   "uniques": 28,
+   "as_of": "2026-11-27"
   },
   "clones": {
-   "count": 715,
-   "uniques": 260,
-   "as_of": "2026-11-26"
+   "count": 762,
+   "uniques": 262,
+   "as_of": "2026-11-27"
   }
  }
 }
